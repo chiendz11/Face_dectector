@@ -1,0 +1,60 @@
+services:
+  backend:
+    image: "${IMAGE_HOST:-ghcr.io}/${REGISTRY_ORG}/face-detector-backend:${IMAGE_TAG}"
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    depends_on:
+      - redis
+      - minio
+    expose:
+      - "8000"
+
+  worker:
+    image: "${IMAGE_HOST:-ghcr.io}/${REGISTRY_ORG}/face-detector-backend:${IMAGE_TAG}"
+    command: celery -A app.worker.celery_app.celery_app worker --loglevel=info
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    depends_on:
+      - backend
+      - redis
+
+  frontend-admin:
+    image: "${IMAGE_HOST:-ghcr.io}/${REGISTRY_ORG}/face-detector-admin:${IMAGE_TAG}"
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  nginx:
+    build:
+      context: ./nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend-admin
+    ports:
+      - "80:80"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  redis_data:
+  minio_data:

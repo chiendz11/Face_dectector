@@ -1,0 +1,11 @@
+services:
+  edge-client:
+    build:
+      context: ./edge-client
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL}
+      EDGE_DEVICE_NAME: ${EDGE_DEVICE_NAME}
+      SCAN_INTERVAL_SECONDS: ${SCAN_INTERVAL_SECONDS}
