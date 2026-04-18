@@ -38,7 +38,12 @@ def main() -> None:
     device_name = os.getenv("EDGE_DEVICE_NAME", "main-gate-01")
     scan_interval_seconds = float(os.getenv("SCAN_INTERVAL_SECONDS", "1.0"))
 
-    camera = CameraStream()
+    try:
+        camera = CameraStream()
+    except Exception as exc:
+        render_status(f"Unable to open edge camera: {exc}")
+        return
+
     render_status(
         f"Starting edge kiosk for {device_name}. Backend target: {backend_base_url}"
     )
