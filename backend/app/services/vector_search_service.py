@@ -62,12 +62,12 @@ class VectorSearchService:
                 existing = FaceEmbedding(
                     employee_code=normalized_code,
                     embedding=embedding,
-                    metadata=metadata or {},
+                    embedding_metadata=metadata or {},
                 )
                 self.db.add(existing)
             else:
                 existing.embedding = embedding
-                existing.metadata = metadata or {}
+                existing.embedding_metadata = metadata or {}
 
             @retry_operation(
                 max_attempts=settings.db_retry_attempts,
@@ -104,7 +104,7 @@ class VectorSearchService:
                 return {
                     "match": result.employee_code,
                     "score": confidence,
-                    "metadata": result.metadata,
+                    "metadata": result.embedding_metadata,
                 }
 
             return DB_CIRCUIT_BREAKER.call(
