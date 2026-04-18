@@ -27,7 +27,7 @@ def test_deepface_service_rejects_empty_image_bytes() -> None:
 
 
 def test_vector_search_service_returns_best_match_above_threshold() -> None:
-    service = VectorSearchService(match_threshold=0.8)
+    service = VectorSearchService(match_threshold=0.8, embedding_dimensions=3)
     embedding = [0.1, 0.2, 0.3]
 
     service.upsert_face_embedding(
@@ -44,7 +44,7 @@ def test_vector_search_service_returns_best_match_above_threshold() -> None:
 
 
 def test_vector_search_service_returns_no_match_below_threshold() -> None:
-    service = VectorSearchService(match_threshold=0.95)
+    service = VectorSearchService(match_threshold=0.95, embedding_dimensions=3)
     service.upsert_face_embedding("emp-004", [1.0, 0.0, 0.0])
 
     result = service.search_similar_face([0.0, 1.0, 0.0])
