@@ -1,6 +1,10 @@
 from alembic import op
 import sqlalchemy as sa
-from pgvector.sqlalchemy import Vector
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
 
 # revision identifiers, used by Alembic.
 revision = "0001_create_employees_and_recognition_events"
