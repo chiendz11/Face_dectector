@@ -30,7 +30,7 @@ class CircuitBreaker:
 
         try:
             result = func(*args, **kwargs)
-        except self.exceptions as exc:
+        except self.exceptions:
             with self._lock:
                 self.failure_count += 1
                 if self.failure_count >= self.failure_threshold:
