@@ -5,44 +5,33 @@ ENVIRONMENT="${ENVIRONMENT:-production}"
 OUTPUT_FILE="${OUTPUT_FILE:-.env.${ENVIRONMENT}}"
 PARAM_PREFIX="${PARAM_PREFIX:-/facedetector/${ENVIRONMENT}}"
 
-PARAM_NAMES=(
-  POSTGRES_DB
-  POSTGRES_USER
-  POSTGRES_PASSWORD
-  DATABASE_URL
-  REDIS_URL
-  QDRANT_URL
-  MINIO_ROOT_USER
-  MINIO_ROOT_PASSWORD
-  MINIO_ENDPOINT
-  MINIO_ACCESS_KEY
-  MINIO_SECRET_KEY
-  MINIO_BUCKET
-  AWS_S3_BUCKET
-  AWS_S3_REGION
-  API_PREFIX
-  MODEL_NAME
-  MODEL_VERSION
-  MATCH_THRESHOLD
-  JWT_SECRET_KEY
-  ADMIN_USERNAME
-  ADMIN_PASSWORD
-  ACCESS_TOKEN_EXPIRE_MINUTES
-  BACKEND_BASE_URL
-  EDGE_DEVICE_NAME
-  SCAN_INTERVAL_SECONDS
-)
-
 rm -f "$OUTPUT_FILE"
 
-for name in "${PARAM_NAMES[@]}"; do
-  parameter_name="${PARAM_PREFIX}/${name}"
-  value=$(aws ssm get-parameter --name "$parameter_name" --with-decryption --query 'Parameter.Value' --output text)
-  if [ "$value" = "None" ]; then
-    echo "ERROR: parameter $parameter_name not found or empty" >&2
-    exit 1
-  fi
-  printf '%s=%s\n' "$name" "$value" >> "$OUTPUT_FILE"
-done
+aws ssm get-parameters-by-path \
+  --path "$PARAM_PREFIX" \
+  --with-decryption \
+  --recursive \
+  --output json \
+  | python3 - "$OUTPUT_FILE" "$PARAM_PREFIX" <<'PY'
+import json
+import sys
 
-echo "Generated $OUTPUT_FILE from SSM path $PARAM_PREFIX"
+output_file = sys.argv[1]
+param_prefix = sys.argv[2].rstrip("/")
+payload = json.load(sys.stdin)
+parameters = payload.get("Parameters", [])
+
+if not parameters:
+    raise SystemExit(f"ERROR: no parameters found under {param_prefix}")
+
+entries = {}
+for parameter in parameters:
+    key = parameter["Name"].rsplit("/", 1)[-1]
+    entries[key] = parameter["Value"]
+
+with open(output_file, "w", encoding="utf-8") as handle:
+    for key in sorted(entries):
+        handle.write(f"{key}={entries[key]}\n")
+
+print(f"Generated {output_file} from SSM path {param_prefix} with {len(entries)} parameters")
+PY

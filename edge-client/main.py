@@ -10,10 +10,10 @@ from ui.display import render_status
 
 def send_crops_to_backend(
     faces: list[bytes],
-    backend_base_url: str,
+    api_base_url: str,
     device_name: str,
 ) -> None:
-    endpoint = f"{backend_base_url.rstrip('/')}/api/vision/recognize"
+    endpoint = f"{api_base_url.rstrip('/')}/api/vision/recognize"
 
     for index, face_bytes in enumerate(faces, start=1):
         try:
@@ -34,7 +34,7 @@ def send_crops_to_backend(
 
 
 def main() -> None:
-    backend_base_url = os.getenv("BACKEND_BASE_URL", "http://localhost")
+    api_base_url = os.getenv("API_BASE_URL", "http://localhost")
     device_name = os.getenv("EDGE_DEVICE_NAME", "main-gate-01")
     scan_interval_seconds = float(os.getenv("SCAN_INTERVAL_SECONDS", "1.0"))
 
@@ -45,7 +45,7 @@ def main() -> None:
         return
 
     render_status(
-        f"Starting edge kiosk for {device_name}. Backend target: {backend_base_url}"
+        f"Starting edge kiosk for {device_name}. API target: {api_base_url}"
     )
 
     while True:
@@ -60,7 +60,7 @@ def main() -> None:
         render_status(
             f"Detected {len(faces)} face(s). Sending cropped face(s) to the backend."
         )
-        send_crops_to_backend(faces, backend_base_url, device_name)
+        send_crops_to_backend(faces, api_base_url, device_name)
         time.sleep(scan_interval_seconds)
 
 

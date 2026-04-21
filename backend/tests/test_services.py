@@ -55,7 +55,7 @@ def test_vector_search_service_returns_no_match_below_threshold() -> None:
 
 
 def test_minio_service_returns_http_snapshot_url() -> None:
-    service = MinioService(bucket_name="snapshots", endpoint="minio.internal:9000")
+    service = MinioService(bucket_name="snapshots", endpoint="minio.internal:9000", public_endpoint="http://minio.internal:9000")
 
     snapshot_url = service.upload_snapshot("main-gate/face.jpg", b"binary-image")
 

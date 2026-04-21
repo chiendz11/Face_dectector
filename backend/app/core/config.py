@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_replica_urls: str | None = None
     redis_url: str = "redis://redis:6379/0"
     minio_endpoint: str = "minio:9000"
+    minio_public_endpoint: str = "http://localhost:9000"
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin"
     minio_bucket: str = "face-snapshots"

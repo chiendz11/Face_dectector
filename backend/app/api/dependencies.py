@@ -42,6 +42,7 @@ def get_minio_service() -> MinioService:
     return MinioService(
         bucket_name=settings.minio_bucket,
         endpoint=settings.minio_endpoint,
+        public_endpoint=settings.minio_public_endpoint,
         aws_s3_bucket=settings.aws_s3_bucket,
         aws_s3_region=settings.aws_s3_region,
         s3_retry_attempts=settings.s3_retry_attempts,

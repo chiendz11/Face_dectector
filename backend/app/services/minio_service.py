@@ -14,6 +14,7 @@ class MinioService:
         self,
         bucket_name: str = "face-snapshots",
         endpoint: str = "minio:9000",
+        public_endpoint: str = "http://localhost:9000",
         aws_s3_bucket: str | None = None,
         aws_s3_region: str | None = None,
         s3_retry_attempts: int = 3,
@@ -23,6 +24,7 @@ class MinioService:
     ) -> None:
         self.bucket_name = bucket_name
         self.endpoint = endpoint
+        self.public_endpoint = public_endpoint
         self.aws_s3_bucket = aws_s3_bucket
         self.aws_s3_region = aws_s3_region
         self._uploaded_objects: dict[str, bytes] = {}
@@ -61,7 +63,7 @@ class MinioService:
     def _upload_to_local(self, normalized_name: str, image_bytes: bytes) -> str:
         self._uploaded_objects[normalized_name] = image_bytes
 
-        endpoint = self.endpoint.rstrip("/")
+        endpoint = self.public_endpoint.rstrip("/")
         if not endpoint.startswith(("http://", "https://")):
             endpoint = f"http://{endpoint}"
 
