@@ -18,8 +18,14 @@ They are intended to be used in two ways:
 
 Notes:
 
-- `MINIO_PUBLIC_ENDPOINT` is rewritten during `ArgoCD Bootstrap` after the Kubernetes load balancer hostname is known.
-- Keep `DATABASE_URL` aligned with `POSTGRES_*` values if you manage both explicitly.
+- In cloud environments, `DATABASE_URL` should point to external PostgreSQL and `REDIS_URL` should point to external Redis or Valkey. The application Helm chart no longer deploys these stateful services inside EKS.
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `REDIS_PASSWORD` are now the canonical secret inputs for managed AWS data services. The infrastructure workflow reads them to provision RDS and ElastiCache.
+- `REDIS_ADDRESS` and `REDIS_PASSWORD` are included for worker autoscaling and should point to the same external Redis deployment used by Celery.
+- `AWS_S3_BUCKET` is the primary object store for staging and production. Leave the `MINIO_*` values blank there unless you intentionally want a local fallback.
+- These templates are backend-only. Edge device settings such as `API_BASE_URL`, `EDGE_DEVICE_NAME`, and `SCAN_INTERVAL_SECONDS` belong in `edge-client/.env.example` rather than the backend runtime contract.
+- The current deployment expects edge devices to capture frames locally, crop faces on-device, and upload only face crops over HTTP. There is no centralized raw-video streaming pipeline in the backend runtime contract.
+- `ArgoCD Bootstrap` rewrites `DATABASE_URL`, `REDIS_URL`, `REDIS_ADDRESS`, and `AWS_S3_BUCKET` from Terraform outputs before syncing the final runtime contract into SSM, so committed templates can stay generic.
+- `AWS_S3_PRESIGNED_URL_EXPIRE_SECONDS` controls how long direct S3 download links remain valid after the backend uploads a snapshot.
 - For staging and production, prefer storing the real values only in GitHub Secrets and AWS SSM, not in Git.
 
 ## External Secrets later

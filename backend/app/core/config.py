@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     minio_bucket: str = "face-snapshots"
     aws_s3_bucket: str | None = None
     aws_s3_region: str | None = None
+    aws_s3_presigned_url_expire_seconds: int = 3600
     embedding_dimensions: int = 16
     model_name: str = "VGG-Face"
     model_version: str = "2026.04-baseline"

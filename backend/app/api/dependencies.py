@@ -45,6 +45,7 @@ def get_minio_service() -> MinioService:
         public_endpoint=settings.minio_public_endpoint,
         aws_s3_bucket=settings.aws_s3_bucket,
         aws_s3_region=settings.aws_s3_region,
+        aws_s3_presigned_url_expire_seconds=settings.aws_s3_presigned_url_expire_seconds,
         s3_retry_attempts=settings.s3_retry_attempts,
         s3_retry_backoff_seconds=settings.s3_retry_backoff_seconds,
         s3_circuit_failure_threshold=settings.s3_circuit_failure_threshold,

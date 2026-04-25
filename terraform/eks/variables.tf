@@ -4,6 +4,12 @@ variable "aws_region" {
   default     = "ap-southeast-1"
 }
 
+variable "deployment_environment" {
+  description = "Logical environment name used to select production-grade defaults"
+  type        = string
+  default     = "staging"
+}
+
 variable "cluster_name" {
   description = "Name of the EKS cluster"
   type        = string
@@ -68,4 +74,122 @@ variable "argocd_chart_version" {
   description = "Version of the ArgoCD Helm chart"
   type        = string
   default     = "7.6.12"
+}
+
+variable "metrics_server_chart_version" {
+  description = "Version of the metrics-server Helm chart"
+  type        = string
+  default     = "3.13.0"
+}
+
+variable "enable_keda" {
+  description = "Whether to install KEDA for queue-driven worker autoscaling"
+  type        = bool
+  default     = null
+}
+
+variable "keda_namespace" {
+  description = "Namespace where KEDA is installed"
+  type        = string
+  default     = "keda"
+}
+
+variable "keda_chart_version" {
+  description = "Version of the KEDA Helm chart"
+  type        = string
+  default     = "2.19.0"
+}
+
+variable "db_name" {
+  description = "Application database name for the managed PostgreSQL instance"
+  type        = string
+}
+
+variable "db_username" {
+  description = "Master username for the managed PostgreSQL instance"
+  type        = string
+}
+
+variable "db_password" {
+  description = "Master password for the managed PostgreSQL instance"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_port" {
+  description = "TCP port for the managed PostgreSQL instance"
+  type        = number
+  default     = 5432
+}
+
+variable "db_instance_class" {
+  description = "Optional RDS instance class override"
+  type        = string
+  default     = ""
+}
+
+variable "db_allocated_storage" {
+  description = "Optional RDS allocated storage override in GiB"
+  type        = number
+  default     = null
+}
+
+variable "db_max_allocated_storage" {
+  description = "Optional RDS max allocated storage override in GiB"
+  type        = number
+  default     = null
+}
+
+variable "db_engine_version" {
+  description = "Engine version for the managed PostgreSQL instance"
+  type        = string
+  default     = "16.4"
+}
+
+variable "redis_auth_token" {
+  description = "Auth token used by the managed Redis replication group"
+  type        = string
+  sensitive   = true
+}
+
+variable "redis_port" {
+  description = "TCP port for the managed Redis replication group"
+  type        = number
+  default     = 6379
+}
+
+variable "redis_node_type" {
+  description = "Optional ElastiCache node type override"
+  type        = string
+  default     = ""
+}
+
+variable "redis_num_cache_clusters" {
+  description = "Optional ElastiCache node count override"
+  type        = number
+  default     = null
+}
+
+variable "redis_engine_version" {
+  description = "Engine version for the managed Redis replication group"
+  type        = string
+  default     = "7.1"
+}
+
+variable "enable_cluster_autoscaler" {
+  description = "Whether to install cluster-autoscaler for the EKS managed node group"
+  type        = bool
+  default     = null
+}
+
+variable "cluster_autoscaler_chart_version" {
+  description = "Version of the cluster-autoscaler Helm chart"
+  type        = string
+  default     = "9.56.0"
+}
+
+variable "cluster_autoscaler_image_tag" {
+  description = "Optional cluster-autoscaler image tag override; defaults to the EKS cluster minor"
+  type        = string
+  default     = ""
 }

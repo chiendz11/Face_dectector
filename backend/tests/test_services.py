@@ -1,6 +1,7 @@
 import pytest
 
 from app.models.schemas import EmployeeCreate
+from app.services import minio_service as minio_module
 from app.services.deepface_service import DeepFaceService
 from app.services.employee_registry import EmployeeRegistryService
 from app.services.minio_service import MinioService
@@ -60,6 +61,50 @@ def test_minio_service_returns_http_snapshot_url() -> None:
     snapshot_url = service.upload_snapshot("main-gate/face.jpg", b"binary-image")
 
     assert snapshot_url == "http://minio.internal:9000/snapshots/main-gate/face.jpg"
+
+
+def test_minio_service_returns_s3_snapshot_url_when_bucket_configured(monkeypatch) -> None:
+    uploaded = {}
+    presigned = {}
+
+    class FakeS3Client:
+        def put_object(self, **kwargs) -> None:
+            uploaded.update(kwargs)
+
+        def generate_presigned_url(self, client_method: str, Params: dict[str, str], ExpiresIn: int) -> str:
+            presigned["client_method"] = client_method
+            presigned["params"] = Params
+            presigned["expires_in"] = ExpiresIn
+            return "https://signed.example.com/main-gate/face.jpg?signature=test"
+
+    class FakeBoto3:
+        @staticmethod
+        def client(service_name: str, region_name: str | None = None) -> FakeS3Client:
+            assert service_name == "s3"
+            assert region_name == "ap-southeast-1"
+            return FakeS3Client()
+
+    monkeypatch.setattr(minio_module, "boto3", FakeBoto3())
+    service = MinioService(
+        aws_s3_bucket="face-detector-staging-snapshots",
+        aws_s3_region="ap-southeast-1",
+        aws_s3_presigned_url_expire_seconds=900,
+        public_endpoint="",
+    )
+
+    snapshot_url = service.upload_snapshot("main-gate/face.jpg", b"binary-image")
+
+    assert snapshot_url == "https://signed.example.com/main-gate/face.jpg?signature=test"
+    assert uploaded["Bucket"] == "face-detector-staging-snapshots"
+    assert uploaded["Key"] == "main-gate/face.jpg"
+    assert presigned == {
+        "client_method": "get_object",
+        "params": {
+            "Bucket": "face-detector-staging-snapshots",
+            "Key": "main-gate/face.jpg",
+        },
+        "expires_in": 900,
+    }
 
 
 def test_minio_service_rejects_empty_snapshot_payload() -> None:

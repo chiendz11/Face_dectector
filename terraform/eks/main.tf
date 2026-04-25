@@ -26,11 +26,46 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  azs = slice(data.aws_availability_zones.available.names, 0, 2)
+  is_production = var.deployment_environment == "production"
+  azs           = slice(data.aws_availability_zones.available.names, 0, 2)
 
   public_subnets = [
     for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 4, index)
   ]
+
+  private_subnets = [
+    for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 4, index + length(local.azs))
+  ]
+
+  enable_keda = var.enable_keda != null ? var.enable_keda : true
+
+  db_instance_class        = trimspace(var.db_instance_class) != "" ? var.db_instance_class : local.is_production ? "db.t4g.small" : "db.t4g.micro"
+  db_allocated_storage     = var.db_allocated_storage != null ? var.db_allocated_storage : local.is_production ? 100 : 20
+  db_max_allocated_storage = var.db_max_allocated_storage != null ? var.db_max_allocated_storage : local.is_production ? 200 : 50
+
+  redis_node_type          = trimspace(var.redis_node_type) != "" ? var.redis_node_type : local.is_production ? "cache.t4g.small" : "cache.t4g.micro"
+  redis_num_cache_clusters = var.redis_num_cache_clusters != null ? var.redis_num_cache_clusters : local.is_production ? 2 : 1
+
+  enable_cluster_autoscaler    = var.enable_cluster_autoscaler != null ? var.enable_cluster_autoscaler : true
+  cluster_autoscaler_image_tag = trimspace(var.cluster_autoscaler_image_tag) != "" ? var.cluster_autoscaler_image_tag : "v${var.cluster_version}.0"
+
+  postgres_identifier        = replace(substr("${var.cluster_name}-postgres", 0, 63), "_", "-")
+  redis_replication_group_id = replace(substr("${var.cluster_name}-redis", 0, 40), "_", "-")
+
+  autoscaler_tags = local.enable_cluster_autoscaler ? {
+    "k8s.io/cluster-autoscaler/enabled"             = "true"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+  } : {}
+
+  eks_managed_node_groups = {
+    default = {
+      min_size      = var.node_min_size
+      max_size      = var.node_max_size
+      desired_size  = var.node_desired_size
+      capacity_type = "ON_DEMAND"
+      tags          = local.autoscaler_tags
+    }
+  }
 }
 
 module "vpc" {
@@ -41,7 +76,8 @@ module "vpc" {
   cidr = var.vpc_cidr
   azs  = local.azs
 
-  public_subnets = local.public_subnets
+  public_subnets  = local.public_subnets
+  private_subnets = local.private_subnets
 
   enable_nat_gateway     = false
   one_nat_gateway_per_az = false
@@ -61,24 +97,18 @@ module "eks" {
   cluster_version                          = var.cluster_version
   cluster_endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
+  enable_irsa                              = true
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnets
 
   eks_managed_node_group_defaults = {
-    ami_type       = "AL2_x86_64"
+    ami_type       = "AL2023_x86_64_STANDARD"
     instance_types = [var.node_instance_type]
     disk_size      = 30
   }
 
-  eks_managed_node_groups = {
-    default = {
-      min_size     = var.node_min_size
-      max_size     = var.node_max_size
-      desired_size = var.node_desired_size
-      capacity_type = "ON_DEMAND"
-    }
-  }
+  eks_managed_node_groups = local.eks_managed_node_groups
 
   cluster_addons = {
     coredns    = {}
@@ -87,12 +117,40 @@ module "eks" {
   }
 }
 
+resource "aws_autoscaling_group_tag" "cluster_autoscaler_enabled" {
+  for_each = local.enable_cluster_autoscaler ? local.eks_managed_node_groups : {}
+
+  autoscaling_group_name = module.eks.eks_managed_node_groups[each.key].node_group_autoscaling_group_names[0]
+
+  tag {
+    key                 = "k8s.io/cluster-autoscaler/enabled"
+    value               = "true"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_group_tag" "cluster_autoscaler_cluster" {
+  for_each = local.enable_cluster_autoscaler ? local.eks_managed_node_groups : {}
+
+  autoscaling_group_name = module.eks.eks_managed_node_groups[each.key].node_group_autoscaling_group_names[0]
+
+  tag {
+    key                 = "k8s.io/cluster-autoscaler/${var.cluster_name}"
+    value               = "owned"
+    propagate_at_launch = true
+  }
+}
+
 data "aws_eks_cluster" "this" {
   name = module.eks.cluster_name
+
+  depends_on = [module.eks]
 }
 
 data "aws_eks_cluster_auth" "this" {
   name = module.eks.cluster_name
+
+  depends_on = [module.eks]
 }
 
 provider "kubernetes" {
@@ -109,7 +167,6 @@ provider "helm" {
   }
 }
 
-resource "aws_ecr_repository" "repositories" {
 resource "aws_s3_bucket" "snapshots" {
   bucket        = var.snapshot_bucket_name
   force_destroy = true
@@ -141,6 +198,174 @@ resource "aws_s3_bucket_public_access_block" "snapshots" {
   restrict_public_buckets = true
 }
 
+resource "aws_db_subnet_group" "postgres" {
+  name       = "${var.cluster_name}-postgres"
+  subnet_ids = module.vpc.private_subnets
+}
+
+resource "aws_security_group" "postgres" {
+  name_prefix = "${var.cluster_name}-postgres-"
+  description = "Allow PostgreSQL access from EKS worker nodes"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port       = var.db_port
+    to_port         = var.db_port
+    protocol        = "tcp"
+    security_groups = [module.eks.node_security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_db_instance" "postgres" {
+  identifier                 = local.postgres_identifier
+  engine                     = "postgres"
+  engine_version             = var.db_engine_version
+  instance_class             = local.db_instance_class
+  allocated_storage          = local.db_allocated_storage
+  max_allocated_storage      = local.db_max_allocated_storage
+  storage_type               = "gp3"
+  db_name                    = var.db_name
+  username                   = var.db_username
+  password                   = var.db_password
+  port                       = var.db_port
+  db_subnet_group_name       = aws_db_subnet_group.postgres.name
+  vpc_security_group_ids     = [aws_security_group.postgres.id]
+  parameter_group_name       = "default.postgres16"
+  backup_retention_period    = local.is_production ? 7 : 1
+  storage_encrypted          = true
+  multi_az                   = local.is_production
+  publicly_accessible        = false
+  auto_minor_version_upgrade = true
+  apply_immediately          = !local.is_production
+  skip_final_snapshot        = true
+}
+
+resource "aws_elasticache_subnet_group" "redis" {
+  name       = "${var.cluster_name}-redis"
+  subnet_ids = module.vpc.private_subnets
+}
+
+resource "aws_security_group" "redis" {
+  name_prefix = "${var.cluster_name}-redis-"
+  description = "Allow Redis access from EKS worker nodes"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port       = var.redis_port
+    to_port         = var.redis_port
+    protocol        = "tcp"
+    security_groups = [module.eks.node_security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_elasticache_replication_group" "redis" {
+  replication_group_id       = local.redis_replication_group_id
+  description                = "Managed Redis for ${var.cluster_name}"
+  engine                     = "redis"
+  engine_version             = var.redis_engine_version
+  node_type                  = local.redis_node_type
+  num_cache_clusters         = local.redis_num_cache_clusters
+  port                       = var.redis_port
+  parameter_group_name       = "default.redis7"
+  subnet_group_name          = aws_elasticache_subnet_group.redis.name
+  security_group_ids         = [aws_security_group.redis.id]
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  auth_token                 = var.redis_auth_token
+  automatic_failover_enabled = local.redis_num_cache_clusters > 1
+  multi_az_enabled           = local.redis_num_cache_clusters > 1
+  snapshot_retention_limit   = local.is_production ? 1 : 0
+  apply_immediately          = true
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_assume_role" {
+  count = local.enable_cluster_autoscaler ? 1 : 0
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [module.eks.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${module.eks.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${module.eks.oidc_provider}:sub"
+      values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler" {
+  count = local.enable_cluster_autoscaler ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeTags",
+      "autoscaling:DescribeWarmPool",
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+      "ec2:DescribeAvailabilityZones",
+      "ec2:DescribeImages",
+      "ec2:DescribeInstanceTypeOfferings",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeLaunchTemplateVersions",
+      "ec2:DescribeSubnets",
+      "ec2:DescribeTags",
+      "eks:DescribeNodegroup",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role" "cluster_autoscaler" {
+  count = local.enable_cluster_autoscaler ? 1 : 0
+
+  name               = "${var.cluster_name}-cluster-autoscaler"
+  assume_role_policy = data.aws_iam_policy_document.cluster_autoscaler_assume_role[0].json
+}
+
+resource "aws_iam_policy" "cluster_autoscaler" {
+  count = local.enable_cluster_autoscaler ? 1 : 0
+
+  name   = "${var.cluster_name}-cluster-autoscaler"
+  policy = data.aws_iam_policy_document.cluster_autoscaler[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+  count = local.enable_cluster_autoscaler ? 1 : 0
+
+  role       = aws_iam_role.cluster_autoscaler[0].name
+  policy_arn = aws_iam_policy.cluster_autoscaler[0].arn
+}
+
 resource "kubernetes_namespace" "argocd" {
   metadata {
     name = var.argocd_namespace
@@ -152,6 +377,16 @@ resource "kubernetes_namespace" "argocd" {
 resource "kubernetes_namespace" "application" {
   metadata {
     name = var.app_namespace
+  }
+
+  depends_on = [module.eks]
+}
+
+resource "kubernetes_namespace" "keda" {
+  count = local.enable_keda ? 1 : 0
+
+  metadata {
+    name = var.keda_namespace
   }
 
   depends_on = [module.eks]
@@ -186,4 +421,86 @@ resource "helm_release" "argocd" {
   ]
 
   depends_on = [module.eks, kubernetes_namespace.argocd]
+}
+
+resource "helm_release" "metrics_server" {
+  name             = "metrics-server"
+  repository       = "https://kubernetes-sigs.github.io/metrics-server/"
+  chart            = "metrics-server"
+  version          = var.metrics_server_chart_version
+  namespace        = "kube-system"
+  create_namespace = false
+  wait             = true
+  timeout          = 600
+
+  values = [
+    yamlencode({
+      apiService = {
+        insecureSkipTLSVerify = true
+      }
+    })
+  ]
+
+  depends_on = [module.eks]
+}
+
+resource "helm_release" "keda" {
+  count            = local.enable_keda ? 1 : 0
+  name             = "keda"
+  repository       = "https://kedacore.github.io/charts"
+  chart            = "keda"
+  version          = var.keda_chart_version
+  namespace        = kubernetes_namespace.keda[0].metadata[0].name
+  create_namespace = false
+  wait             = true
+  timeout          = 600
+
+  depends_on = [module.eks, kubernetes_namespace.keda]
+}
+
+resource "helm_release" "cluster_autoscaler" {
+  count            = local.enable_cluster_autoscaler ? 1 : 0
+  name             = "cluster-autoscaler"
+  repository       = "https://kubernetes.github.io/autoscaler"
+  chart            = "cluster-autoscaler"
+  version          = var.cluster_autoscaler_chart_version
+  namespace        = "kube-system"
+  create_namespace = false
+  wait             = true
+  timeout          = 600
+
+  values = [
+    yamlencode({
+      cloudProvider = "aws"
+      awsRegion     = var.aws_region
+      autoDiscovery = {
+        clusterName = var.cluster_name
+      }
+      fullnameOverride = "cluster-autoscaler"
+      image = {
+        tag = local.cluster_autoscaler_image_tag
+      }
+      rbac = {
+        serviceAccount = {
+          create = true
+          name   = "cluster-autoscaler"
+          annotations = {
+            "eks.amazonaws.com/role-arn" = aws_iam_role.cluster_autoscaler[0].arn
+          }
+        }
+      }
+      extraArgs = {
+        "balance-similar-node-groups"   = true
+        expander                        = "least-waste"
+        "skip-nodes-with-local-storage" = false
+      }
+    })
+  ]
+
+  depends_on = [
+    module.eks,
+    aws_iam_role_policy_attachment.cluster_autoscaler,
+    aws_autoscaling_group_tag.cluster_autoscaler_enabled,
+    aws_autoscaling_group_tag.cluster_autoscaler_cluster,
+  ]
 }
