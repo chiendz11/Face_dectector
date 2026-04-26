@@ -22,6 +22,10 @@ def is_default_branch(ref_name: str, default_branch: str) -> bool:
     return ref_name in {default_branch, "main", "master"}
 
 
+def parse_csv_values(raw_value: str) -> list[str]:
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
 def emit_outputs(outputs: dict[str, str]) -> None:
     github_output = os.environ.get("GITHUB_OUTPUT")
     if not github_output:
@@ -67,6 +71,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sandbox-node-min-size", default="1")
     parser.add_argument("--sandbox-node-max-size", default="2")
     parser.add_argument("--sandbox-node-desired-size", default="1")
+    parser.add_argument(
+        "--sandbox-allowed-branch-prefixes",
+        default="feature/,infra/,chore/,platform/",
+    )
     parser.add_argument("--role-sandbox-arn", default="")
     parser.add_argument("--role-staging-arn", default="")
     parser.add_argument("--role-production-arn", default="")
@@ -83,15 +91,25 @@ def main() -> int:
     input_node_max_size = args.input_node_max_size.strip()
     input_node_desired_size = args.input_node_desired_size.strip()
     input_git_revision = args.input_git_revision.strip()
+    allowed_sandbox_prefixes = parse_csv_values(args.sandbox_allowed_branch_prefixes)
 
     if args.environment == "sandbox":
-        if not args.ref_name.startswith("feature/"):
+        if not allowed_sandbox_prefixes:
             raise SystemExit(
-                "Sandbox runs are allowed only from feature/* branches. "
-                f"Current ref is {args.ref_name}."
+                "No sandbox branch prefixes configured. Provide --sandbox-allowed-branch-prefixes."
             )
 
-        sandbox_branch = args.ref_name.split("/", 1)[1]
+        matched_prefix = next(
+            (prefix for prefix in allowed_sandbox_prefixes if args.ref_name.startswith(prefix)),
+            None,
+        )
+        if matched_prefix is None:
+            raise SystemExit(
+                "Sandbox runs are allowed only from configured branch prefixes "
+                f"({', '.join(allowed_sandbox_prefixes)}). Current ref is {args.ref_name}."
+            )
+
+        sandbox_branch = args.ref_name[len(matched_prefix):] or args.ref_name
         cluster_prefix = slugify(args.sandbox_cluster_prefix, 12)
         max_branch_slug_length = max(6, 29 - len(cluster_prefix) - 1)
         branch_slug = slugify(sandbox_branch, max_branch_slug_length)
