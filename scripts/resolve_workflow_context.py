@@ -92,12 +92,14 @@ def main() -> int:
             )
 
         sandbox_branch = args.ref_name.split("/", 1)[1]
-        branch_slug = slugify(sandbox_branch, 20)
-        cluster_prefix = slugify(args.sandbox_cluster_prefix, 30)
+        cluster_prefix = slugify(args.sandbox_cluster_prefix, 12)
+        max_branch_slug_length = max(6, 29 - len(cluster_prefix) - 1)
+        branch_slug = slugify(sandbox_branch, max_branch_slug_length)
         bucket_prefix = slugify(args.sandbox_snapshot_bucket_prefix, 24)
 
         cluster_name = input_cluster_name or f"{cluster_prefix}-{branch_slug}"
-        cluster_slug = slugify(cluster_name, 32)
+        cluster_name = slugify(cluster_name, 29)
+        cluster_slug = slugify(cluster_name, 29)
         snapshot_bucket_name = input_snapshot_bucket_name or f"{bucket_prefix}-{args.repository_id}-{branch_slug}"
         snapshot_bucket_name = snapshot_bucket_name.lower()[:63].rstrip("-")
 
