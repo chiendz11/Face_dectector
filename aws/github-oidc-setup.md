@@ -16,6 +16,11 @@ Use these trust policy templates as the starting point:
 - `aws/github-oidc-trust-policy-staging.json`
 - `aws/github-oidc-trust-policy-production.json`
 
+The sandbox trust policy intentionally allows both:
+
+- `repo:<owner>/<repo>:ref:refs/heads/feature/*` for manual sandbox `apply`, `destroy`, and bootstrap runs from feature branches
+- `repo:<owner>/<repo>:pull_request` for the `Terraform PR Plan` workflow that runs on pull requests targeting the default branch
+
 Replace these placeholders before creating the roles:
 
 - `${AWS_ACCOUNT_ID}`
