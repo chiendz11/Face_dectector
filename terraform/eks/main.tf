@@ -401,7 +401,7 @@ resource "helm_release" "argocd" {
   namespace        = kubernetes_namespace.argocd.metadata[0].name
   create_namespace = false
   wait             = true
-  timeout          = 900
+  timeout          = local.is_production ? 900 : 1200
 
   values = [
     yamlencode({
@@ -416,6 +416,46 @@ resource "helm_release" "argocd" {
       server = {
         service = {
           type = "ClusterIP"
+        }
+        resources = local.is_production ? {} : {
+          requests = { cpu = "50m", memory = "128Mi" }
+          limits   = { cpu = "300m", memory = "256Mi" }
+        }
+      }
+      repoServer = {
+        resources = local.is_production ? {} : {
+          requests = { cpu = "50m", memory = "128Mi" }
+          limits   = { cpu = "300m", memory = "256Mi" }
+        }
+      }
+      controller = {
+        resources = local.is_production ? {} : {
+          requests = { cpu = "100m", memory = "256Mi" }
+          limits   = { cpu = "500m", memory = "512Mi" }
+        }
+      }
+      redis = {
+        resources = local.is_production ? {} : {
+          requests = { cpu = "25m", memory = "64Mi" }
+          limits   = { cpu = "100m", memory = "128Mi" }
+        }
+      }
+      dex = {
+        resources = local.is_production ? {} : {
+          requests = { cpu = "10m", memory = "32Mi" }
+          limits   = { cpu = "50m", memory = "64Mi" }
+        }
+      }
+      applicationSet = {
+        resources = local.is_production ? {} : {
+          requests = { cpu = "25m", memory = "64Mi" }
+          limits   = { cpu = "100m", memory = "128Mi" }
+        }
+      }
+      notifications = {
+        resources = local.is_production ? {} : {
+          requests = { cpu = "10m", memory = "32Mi" }
+          limits   = { cpu = "50m", memory = "64Mi" }
         }
       }
     })
