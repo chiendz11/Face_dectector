@@ -143,7 +143,7 @@ variable "db_max_allocated_storage" {
 variable "db_engine_version" {
   description = "Engine version for the managed PostgreSQL instance"
   type        = string
-  default     = "16.4"
+  default     = "16"
 }
 
 variable "redis_auth_token" {
