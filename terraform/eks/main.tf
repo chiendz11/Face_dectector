@@ -106,7 +106,7 @@ module "eks" {
   cluster_name                             = var.cluster_name
   cluster_version                          = var.cluster_version
   cluster_endpoint_public_access           = true
-  cluster_endpoint_private_access          = local.use_private_worker_subnets
+  cluster_endpoint_private_access          = true
   enable_cluster_creator_admin_permissions = true
   enable_irsa                              = true
 
