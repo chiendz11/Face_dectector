@@ -57,7 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sandbox-snapshot-bucket-prefix", default="face-detector-sbx")
     parser.add_argument("--staging-node-instance-type", default="c7i-flex.large")
     parser.add_argument("--production-node-instance-type", default="m7i-flex.large")
-    parser.add_argument("--sandbox-node-instance-type", default="t3.small")
+    parser.add_argument("--sandbox-node-instance-type", default="c7i-flex.large")
     parser.add_argument("--staging-node-min-size", default="1")
     parser.add_argument("--staging-node-max-size", default="2")
     parser.add_argument("--staging-node-desired-size", default="1")
