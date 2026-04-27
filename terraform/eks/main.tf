@@ -26,6 +26,8 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
+  is_sandbox    = var.deployment_environment == "sandbox"
+  is_staging    = var.deployment_environment == "staging"
   is_production = var.deployment_environment == "production"
   azs           = slice(data.aws_availability_zones.available.names, 0, 2)
 
@@ -36,6 +38,8 @@ locals {
   private_subnets = [
     for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 4, index + length(local.azs))
   ]
+
+  use_private_worker_subnets = !local.is_sandbox
 
   enable_keda = var.enable_keda != null ? var.enable_keda : true
 
@@ -78,15 +82,20 @@ module "vpc" {
 
   public_subnets          = local.public_subnets
   private_subnets         = local.private_subnets
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = local.is_sandbox
 
-  enable_nat_gateway     = false
-  one_nat_gateway_per_az = false
-  single_nat_gateway     = false
+  enable_nat_gateway     = local.use_private_worker_subnets
+  one_nat_gateway_per_az = local.is_production
+  single_nat_gateway     = local.is_staging
 
   public_subnet_tags = {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/elb"                    = 1
+  }
+
+  private_subnet_tags = {
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/role/internal-elb"           = 1
   }
 }
 
@@ -97,11 +106,12 @@ module "eks" {
   cluster_name                             = var.cluster_name
   cluster_version                          = var.cluster_version
   cluster_endpoint_public_access           = true
+  cluster_endpoint_private_access          = local.use_private_worker_subnets
   enable_cluster_creator_admin_permissions = true
   enable_irsa                              = true
 
   vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.public_subnets
+  subnet_ids = local.use_private_worker_subnets ? module.vpc.private_subnets : module.vpc.public_subnets
 
   eks_managed_node_group_defaults = {
     ami_type       = "AL2023_x86_64_STANDARD"
