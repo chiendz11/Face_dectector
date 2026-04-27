@@ -449,18 +449,21 @@ resource "helm_release" "argocd" {
         }
       }
       dex = {
+        enabled = false
         resources = local.is_production ? {} : {
           requests = { cpu = "10m", memory = "32Mi" }
           limits   = { cpu = "50m", memory = "64Mi" }
         }
       }
       applicationSet = {
+        enabled = false
         resources = local.is_production ? {} : {
           requests = { cpu = "25m", memory = "64Mi" }
           limits   = { cpu = "100m", memory = "128Mi" }
         }
       }
       notifications = {
+        enabled = false
         resources = local.is_production ? {} : {
           requests = { cpu = "10m", memory = "32Mi" }
           limits   = { cpu = "50m", memory = "64Mi" }
