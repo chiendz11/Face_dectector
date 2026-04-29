@@ -10,6 +10,24 @@ variable "deployment_environment" {
   default     = "staging"
 }
 
+variable "environment_identity" {
+  description = "Stable environment identity used for tagging resources (for example staging, production, pr-101)"
+  type        = string
+  default     = ""
+}
+
+variable "env_version" {
+  description = "Point-in-time environment version used for AWS resource tags (for example main-<sha> or v1.2.0)"
+  type        = string
+  default     = ""
+}
+
+variable "resource_owner" {
+  description = "Optional owner identifier used for cost-allocation tags on sandbox resources"
+  type        = string
+  default     = ""
+}
+
 variable "cluster_name" {
   description = "Name of the EKS cluster"
   type        = string

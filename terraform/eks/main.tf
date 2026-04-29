@@ -19,6 +19,10 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = local.resource_tags
+  }
 }
 
 data "aws_availability_zones" "available" {
@@ -30,6 +34,21 @@ locals {
   is_staging    = var.deployment_environment == "staging"
   is_production = var.deployment_environment == "production"
   azs           = slice(data.aws_availability_zones.available.names, 0, 2)
+  resolved_environment_identity = trimspace(var.environment_identity) != "" ? trimspace(var.environment_identity) : var.deployment_environment
+  resolved_env_version         = trimspace(var.env_version) != "" ? trimspace(var.env_version) : "${local.resolved_environment_identity}-unknown"
+  sandbox_capacity_type       = local.is_sandbox ? "SPOT" : "ON_DEMAND"
+  resource_tags = merge({
+    "facedetector:managed-by"   = "terraform"
+    "facedetector:environment"  = var.deployment_environment
+    "facedetector:identity"     = local.resolved_environment_identity
+    "facedetector:version"      = local.resolved_env_version
+    "facedetector:lifecycle"    = local.is_sandbox ? "ephemeral" : "shared"
+    "facedetector:cost-tier"    = local.is_sandbox ? "sandbox" : "shared"
+    "facedetector:capacity-type" = local.sandbox_capacity_type
+    "facedetector:cluster-name" = var.cluster_name
+  }, trimspace(var.resource_owner) != "" ? {
+    "facedetector:owner" = trimspace(var.resource_owner)
+  } : {})
 
   public_subnets = [
     for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 4, index)
@@ -66,9 +85,22 @@ locals {
       min_size      = var.node_min_size
       max_size      = var.node_max_size
       desired_size  = var.node_desired_size
-      capacity_type = "ON_DEMAND"
-      tags          = local.autoscaler_tags
+      capacity_type = local.sandbox_capacity_type
+      tags          = merge(local.resource_tags, local.autoscaler_tags)
     }
+  }
+
+  propagated_asg_tags = {
+    for tag in flatten([
+      for group_name, _ in local.eks_managed_node_groups : [
+        for tag_key, tag_value in local.resource_tags : {
+          key        = "${group_name}:${tag_key}"
+          group_name = group_name
+          tag_key    = tag_key
+          tag_value  = tag_value
+        }
+      ]
+    ]) : tag.key => tag
   }
 }
 
@@ -87,16 +119,17 @@ module "vpc" {
   enable_nat_gateway     = local.use_private_worker_subnets
   one_nat_gateway_per_az = local.is_production
   single_nat_gateway     = local.is_staging
+  tags                   = local.resource_tags
 
-  public_subnet_tags = {
+  public_subnet_tags = merge(local.resource_tags, {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/elb"                    = 1
-  }
+  })
 
-  private_subnet_tags = {
+  private_subnet_tags = merge(local.resource_tags, {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/internal-elb"           = 1
-  }
+  })
 }
 
 module "eks" {
@@ -109,6 +142,7 @@ module "eks" {
   cluster_endpoint_private_access          = true
   enable_cluster_creator_admin_permissions = true
   enable_irsa                              = true
+  tags                                     = local.resource_tags
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = local.use_private_worker_subnets ? module.vpc.private_subnets : module.vpc.public_subnets
@@ -148,6 +182,18 @@ resource "aws_autoscaling_group_tag" "cluster_autoscaler_cluster" {
   tag {
     key                 = "k8s.io/cluster-autoscaler/${var.cluster_name}"
     value               = "owned"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_group_tag" "node_metadata" {
+  for_each = local.propagated_asg_tags
+
+  autoscaling_group_name = module.eks.eks_managed_node_groups[each.value.group_name].node_group_autoscaling_group_names[0]
+
+  tag {
+    key                 = each.value.tag_key
+    value               = each.value.tag_value
     propagate_at_launch = true
   }
 }

@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WorkflowRDSandboxControlPlane",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:*",
+        "dynamodb:*",
+        "ec2:*",
+        "eks:*",
+        "elasticache:*",
+        "elasticloadbalancing:*",
+        "iam:*",
+        "kms:*",
+        "logs:*",
+        "rds:*",
+        "s3:*",
+        "ssm:*",
+        "sts:GetCallerIdentity",
+        "tag:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

@@ -9,6 +9,24 @@ variable "environment" {
   type        = string
 }
 
+variable "environment_identity" {
+  description = "Stable environment identity used for tagging resources (for example staging, production, pr-101)"
+  type        = string
+  default     = ""
+}
+
+variable "env_version" {
+  description = "Point-in-time environment version used for AWS resource tags (for example main-<sha> or v1.2.0)"
+  type        = string
+  default     = ""
+}
+
+variable "resource_owner" {
+  description = "Optional owner identifier used for cost-allocation tags on sandbox parameter sets"
+  type        = string
+  default     = ""
+}
+
 variable "env_file_path" {
   description = "Optional path to a backend runtime env file. When unset, the committed example template for the selected environment is used."
   type        = string

@@ -10,12 +10,29 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = local.resource_tags
+  }
 }
 
 locals {
   default_env_file = "${path.module}/../../deploy/runtime/backend.${var.environment}.env.example"
   env_file         = coalesce(var.env_file_path, local.default_env_file)
   resolved_kms_key = var.kms_key_id == null ? "" : trimspace(var.kms_key_id)
+  resolved_environment_identity = trimspace(var.environment_identity) != "" ? trimspace(var.environment_identity) : var.environment
+  resolved_env_version         = trimspace(var.env_version) != "" ? trimspace(var.env_version) : "${local.resolved_environment_identity}-unknown"
+  resource_tags = merge({
+    "facedetector:managed-by"  = "terraform"
+    "facedetector:environment" = var.environment
+    "facedetector:identity"    = local.resolved_environment_identity
+    "facedetector:version"     = local.resolved_env_version
+    "facedetector:lifecycle"   = startswith(var.environment, "sandbox/") ? "ephemeral" : "shared"
+    "facedetector:cost-tier"   = startswith(var.environment, "sandbox/") ? "sandbox" : "shared"
+    "facedetector:parameter-set" = "/facedetector/${var.environment}"
+  }, trimspace(var.resource_owner) != "" ? {
+    "facedetector:owner" = trimspace(var.resource_owner)
+  } : {})
 
   raw_lines = split("\n", trimspace(file(local.env_file)))
 
