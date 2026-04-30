@@ -22,6 +22,8 @@ def run_aws(region: str, aws_args: list[str], expect_json: bool = True, allow_mi
                 "AutoScalingGroup name not found",
                 "does not exist",
                 "InvalidInstanceID.NotFound",
+                "InvalidGroup.NotFound",
+                "InvalidSecurityGroupID.NotFound",
                 "LoadBalancerNotFound",
                 "TargetGroupNotFound",
                 "InvalidVpcEndpointId.NotFound",
@@ -313,6 +315,53 @@ def cleanup_vpc_peering_connections(region: str, cluster_name: str, environment_
         )
 
 
+def cleanup_security_groups(region: str, cluster_name: str, environment_identity: str) -> None:
+    response = run_aws(region, ["ec2", "describe-security-groups"])
+    matched = [
+        group
+        for group in response.get("SecurityGroups", [])
+        if group.get("GroupName") != "default"
+        and has_cluster_marker(group.get("Tags"), cluster_name, environment_identity)
+    ]
+
+    if not matched:
+        print(f"No non-default security groups tagged for sandbox cluster {cluster_name}.")
+        return
+
+    for group in matched:
+        group_id = group["GroupId"]
+        group_name = group.get("GroupName", group_id)
+        interfaces = run_aws(
+            region,
+            ["ec2", "describe-network-interfaces", "--filters", f"Name=group-id,Values={group_id}"],
+        )
+        attached_interfaces = interfaces.get("NetworkInterfaces", [])
+        if attached_interfaces:
+            print(
+                f"Security group {group_name} ({group_id}) is still attached to "
+                f"{len(attached_interfaces)} network interface(s). Skipping for now."
+            )
+            continue
+
+        print(f"Deleting orphaned security group {group_name} ({group_id}) for sandbox cluster {cluster_name}.")
+        try:
+            run_aws(
+                region,
+                ["ec2", "delete-security-group", "--group-id", group_id],
+                expect_json=False,
+                allow_missing=True,
+            )
+        except SystemExit as exc:
+            error_text = str(exc)
+            if "DependencyViolation" in error_text or "InvalidGroup.InUse" in error_text:
+                print(
+                    f"Security group {group_name} ({group_id}) is still in use by another AWS dependency. "
+                    "Skipping for now."
+                )
+                continue
+            raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--region", required=True)
@@ -329,6 +378,7 @@ def main() -> int:
     cleanup_available_volumes(args.region, args.cluster_name, environment_identity)
     cleanup_vpc_endpoints(args.region, args.cluster_name, environment_identity)
     cleanup_vpc_peering_connections(args.region, args.cluster_name, environment_identity)
+    cleanup_security_groups(args.region, args.cluster_name, environment_identity)
     print(f"Finished sandbox AWS orphan cleanup for {args.cluster_name}.")
     return 0
 
