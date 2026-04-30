@@ -434,6 +434,10 @@ resource "kubernetes_namespace" "application" {
     name = var.app_namespace
   }
 
+  timeouts {
+    delete = local.is_sandbox ? "15m" : "5m"
+  }
+
   depends_on = [module.eks]
 }
 
