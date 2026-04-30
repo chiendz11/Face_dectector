@@ -4,15 +4,33 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+load_env_file() {
+  local env_file="$1"
+  local line=""
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+
+    if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
+      continue
+    fi
+
+    if [[ "$line" != *=* ]]; then
+      echo "Invalid env assignment in ${env_file}: ${line}" >&2
+      return 1
+    fi
+
+    export "$line"
+  done < "$env_file"
+}
+
 ORIGINAL_ENV_BACKUP=""
 if [ -f .env ]; then
   ORIGINAL_ENV_BACKUP="$(mktemp)"
   cp .env "$ORIGINAL_ENV_BACKUP"
 fi
 cp .env.example .env
-set -a
-. ./.env
-set +a
+load_env_file .env
 
 restore_env() {
   if [ -n "$ORIGINAL_ENV_BACKUP" ]; then
