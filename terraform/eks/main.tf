@@ -30,23 +30,23 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  is_sandbox    = var.deployment_environment == "sandbox"
-  is_staging    = var.deployment_environment == "staging"
-  is_production = var.deployment_environment == "production"
-  azs           = slice(data.aws_availability_zones.available.names, 0, 2)
+  is_sandbox                    = var.deployment_environment == "sandbox"
+  is_staging                    = var.deployment_environment == "staging"
+  is_production                 = var.deployment_environment == "production"
+  azs                           = slice(data.aws_availability_zones.available.names, 0, 2)
   resolved_environment_identity = trimspace(var.environment_identity) != "" ? trimspace(var.environment_identity) : var.deployment_environment
-  resolved_env_version         = trimspace(var.env_version) != "" ? trimspace(var.env_version) : "${local.resolved_environment_identity}-unknown"
-  sandbox_capacity_type       = local.is_sandbox ? "SPOT" : "ON_DEMAND"
+  resolved_env_version          = trimspace(var.env_version) != "" ? trimspace(var.env_version) : "${local.resolved_environment_identity}-unknown"
+  sandbox_capacity_type         = local.is_sandbox ? "SPOT" : "ON_DEMAND"
   resource_tags = merge({
-    "facedetector:managed-by"   = "terraform"
-    "facedetector:environment"  = var.deployment_environment
-    "facedetector:identity"     = local.resolved_environment_identity
-    "facedetector:version"      = local.resolved_env_version
-    "facedetector:lifecycle"    = local.is_sandbox ? "ephemeral" : "shared"
-    "facedetector:cost-tier"    = local.is_sandbox ? "sandbox" : "shared"
+    "facedetector:managed-by"    = "terraform"
+    "facedetector:environment"   = var.deployment_environment
+    "facedetector:identity"      = local.resolved_environment_identity
+    "facedetector:version"       = local.resolved_env_version
+    "facedetector:lifecycle"     = local.is_sandbox ? "ephemeral" : "shared"
+    "facedetector:cost-tier"     = local.is_sandbox ? "sandbox" : "shared"
     "facedetector:capacity-type" = local.sandbox_capacity_type
-    "facedetector:cluster-name" = var.cluster_name
-  }, trimspace(var.resource_owner) != "" ? {
+    "facedetector:cluster-name"  = var.cluster_name
+    }, trimspace(var.resource_owner) != "" ? {
     "facedetector:owner" = trimspace(var.resource_owner)
   } : {})
 
@@ -550,7 +550,7 @@ resource "helm_release" "keda" {
   version          = var.keda_chart_version
   namespace        = kubernetes_namespace.keda[0].metadata[0].name
   create_namespace = false
-  wait             = true
+  wait             = !local.is_sandbox
   timeout          = 600
 
   depends_on = [module.eks, kubernetes_namespace.keda]
