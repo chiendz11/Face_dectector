@@ -7,7 +7,6 @@ services:
       - .env
     depends_on:
       - db
-      - vector-db
       - minio
       - redis
     expose:
@@ -22,6 +21,7 @@ services:
       - .env
     depends_on:
       - backend
+      - db
       - redis
 
   frontend-admin:
@@ -50,12 +50,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
-  vector-db:
-    image: qdrant/qdrant:latest
-    restart: unless-stopped
-    volumes:
-      - qdrant_data:/qdrant/storage
 
   minio:
     image: minio/minio:latest
@@ -91,7 +85,6 @@ services:
 
 volumes:
   postgres_data:
-  qdrant_data:
   minio_data:
   redis_data:
   postgres_backups:

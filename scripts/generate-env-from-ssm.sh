@@ -4,45 +4,80 @@ set -euo pipefail
 ENVIRONMENT="${ENVIRONMENT:-production}"
 OUTPUT_FILE="${OUTPUT_FILE:-.env.${ENVIRONMENT}}"
 PARAM_PREFIX="${PARAM_PREFIX:-/facedetector/${ENVIRONMENT}}"
-
-PARAM_NAMES=(
-  POSTGRES_DB
-  POSTGRES_USER
-  POSTGRES_PASSWORD
-  DATABASE_URL
-  REDIS_URL
-  QDRANT_URL
-  MINIO_ROOT_USER
-  MINIO_ROOT_PASSWORD
-  MINIO_ENDPOINT
-  MINIO_ACCESS_KEY
-  MINIO_SECRET_KEY
-  MINIO_BUCKET
-  AWS_S3_BUCKET
-  AWS_S3_REGION
-  API_PREFIX
-  MODEL_NAME
-  MODEL_VERSION
-  MATCH_THRESHOLD
-  JWT_SECRET_KEY
-  ADMIN_USERNAME
-  ADMIN_PASSWORD
-  ACCESS_TOKEN_EXPIRE_MINUTES
-  BACKEND_BASE_URL
-  EDGE_DEVICE_NAME
-  SCAN_INTERVAL_SECONDS
-)
+MAX_ATTEMPTS="${MAX_ATTEMPTS:-5}"
 
 rm -f "$OUTPUT_FILE"
 
-for name in "${PARAM_NAMES[@]}"; do
-  parameter_name="${PARAM_PREFIX}/${name}"
-  value=$(aws ssm get-parameter --name "$parameter_name" --with-decryption --query 'Parameter.Value' --output text)
-  if [ "$value" = "None" ]; then
-    echo "ERROR: parameter $parameter_name not found or empty" >&2
-    exit 1
-  fi
-  printf '%s=%s\n' "$name" "$value" >> "$OUTPUT_FILE"
-done
+stdout_file="$(mktemp)"
+stderr_file="$(mktemp)"
 
-echo "Generated $OUTPUT_FILE from SSM path $PARAM_PREFIX"
+cleanup() {
+    rm -f "$stdout_file" "$stderr_file"
+}
+
+trap cleanup EXIT
+
+attempt=1
+while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+    if aws ssm get-parameters-by-path \
+        --no-cli-pager \
+        --path "$PARAM_PREFIX" \
+        --with-decryption \
+        --recursive \
+        --output json \
+        >"$stdout_file" 2>"$stderr_file"; then
+        if python3 - "$stdout_file" "$OUTPUT_FILE" "$PARAM_PREFIX" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload_path = Path(sys.argv[1])
+output_file = Path(sys.argv[2])
+param_prefix = sys.argv[3].rstrip("/")
+payload_text = payload_path.read_text(encoding="utf-8")
+
+if not payload_text.strip():
+    raise SystemExit(f"ERROR: empty SSM response for {param_prefix}")
+
+try:
+    payload = json.loads(payload_text)
+except json.JSONDecodeError as exc:
+    raise SystemExit(f"ERROR: invalid JSON from SSM for {param_prefix}: {exc}") from exc
+
+parameters = payload.get("Parameters", [])
+
+if not parameters:
+    raise SystemExit(f"ERROR: no parameters found under {param_prefix}")
+
+entries = {}
+for parameter in parameters:
+    key = parameter["Name"].rsplit("/", 1)[-1]
+    entries[key] = parameter["Value"]
+
+with output_file.open("w", encoding="utf-8") as handle:
+    for key in sorted(entries):
+        handle.write(f"{key}={entries[key]}\n")
+
+print(f"Generated {output_file} from SSM path {param_prefix} with {len(entries)} parameters")
+PY
+        then
+            exit 0
+        fi
+    fi
+
+    if [ -s "$stderr_file" ]; then
+        cat "$stderr_file" >&2
+    fi
+    if [ -s "$stdout_file" ]; then
+        cat "$stdout_file" >&2
+    fi
+
+    if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
+        echo "ERROR: unable to generate runtime env file from SSM path $PARAM_PREFIX after $MAX_ATTEMPTS attempts" >&2
+        exit 1
+    fi
+
+    echo "Retrying SSM env generation for $PARAM_PREFIX (attempt $attempt/$MAX_ATTEMPTS)." >&2
+    sleep 3
+    attempt=$((attempt + 1))
+done

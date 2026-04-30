@@ -5,6 +5,7 @@ from app.models.schemas import LoginRequest, Token
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+AUTH_SCHEME = "bearer"
 
 
 @router.post("/login", response_model=Token)
@@ -23,4 +24,4 @@ def login(
         )
 
     token = auth_service.create_access_token(subject=credentials.username)
-    return Token(access_token=token, token_type="bearer")
+    return Token(access_token=token, token_type=AUTH_SCHEME)
