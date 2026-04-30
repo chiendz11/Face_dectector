@@ -24,6 +24,7 @@ def run_aws(region: str, aws_args: list[str], expect_json: bool = True, allow_mi
                 "InvalidInstanceID.NotFound",
                 "InvalidGroup.NotFound",
                 "InvalidSecurityGroupID.NotFound",
+                "InvalidNetworkInterfaceID.NotFound",
                 "LoadBalancerNotFound",
                 "TargetGroupNotFound",
                 "InvalidVpcEndpointId.NotFound",
@@ -268,6 +269,36 @@ def cleanup_available_volumes(region: str, cluster_name: str, environment_identi
         )
 
 
+def cleanup_available_network_interfaces(region: str, cluster_name: str, environment_identity: str) -> None:
+    response = run_aws(
+        region,
+        [
+            "ec2",
+            "describe-network-interfaces",
+            "--filters",
+            "Name=status,Values=available",
+        ],
+    )
+    matched = [
+        interface["NetworkInterfaceId"]
+        for interface in response.get("NetworkInterfaces", [])
+        if has_cluster_marker(interface.get("TagSet") or interface.get("Tags"), cluster_name, environment_identity)
+    ]
+
+    if not matched:
+        print(f"No available network interfaces tagged for sandbox cluster {cluster_name}.")
+        return
+
+    for interface_id in matched:
+        print(f"Deleting available network interface {interface_id} for sandbox cluster {cluster_name}.")
+        run_aws(
+            region,
+            ["ec2", "delete-network-interface", "--network-interface-id", interface_id],
+            expect_json=False,
+            allow_missing=True,
+        )
+
+
 def cleanup_vpc_endpoints(region: str, cluster_name: str, environment_identity: str) -> None:
     response = run_aws(region, ["ec2", "describe-vpc-endpoints"])
     matched = [
@@ -376,6 +407,7 @@ def main() -> int:
     cleanup_elbv2_load_balancers(args.region, args.cluster_name, environment_identity)
     cleanup_classic_load_balancers(args.region, args.cluster_name, environment_identity)
     cleanup_available_volumes(args.region, args.cluster_name, environment_identity)
+    cleanup_available_network_interfaces(args.region, args.cluster_name, environment_identity)
     cleanup_vpc_endpoints(args.region, args.cluster_name, environment_identity)
     cleanup_vpc_peering_connections(args.region, args.cluster_name, environment_identity)
     cleanup_security_groups(args.region, args.cluster_name, environment_identity)
