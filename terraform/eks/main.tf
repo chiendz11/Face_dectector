@@ -550,7 +550,7 @@ resource "helm_release" "keda" {
   version          = var.keda_chart_version
   namespace        = kubernetes_namespace.keda[0].metadata[0].name
   create_namespace = false
-  wait             = true
+  wait             = !local.is_sandbox
   timeout          = 600
 
   depends_on = [module.eks, kubernetes_namespace.keda]
