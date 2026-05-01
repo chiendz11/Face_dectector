@@ -21,12 +21,12 @@ class RecognitionService:
     def __init__(
         self,
         deepface_service: DeepFaceService,
-        qdrant_service: VectorSearchService,
+        vector_search_service: VectorSearchService,
         minio_service: MinioService,
         db: Session | None = None,
     ) -> None:
         self.deepface_service = deepface_service
-        self.qdrant_service = qdrant_service
+        self.vector_search_service = vector_search_service
         self.minio_service = minio_service
         self.db = db
 
@@ -45,7 +45,7 @@ class RecognitionService:
         object_name = f"{normalized_device_name}/{normalized_filename}"
 
         embedding = self.deepface_service.embed_face(image_bytes)
-        match_payload = self.qdrant_service.search_similar_face(embedding)
+        match_payload = self.vector_search_service.search_similar_face(embedding)
         snapshot_url = self.minio_service.upload_snapshot(object_name, image_bytes)
         matched = match_payload["match"] is not None
         confidence = float(match_payload["score"])

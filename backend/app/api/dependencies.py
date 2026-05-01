@@ -66,7 +66,7 @@ def get_recognition_service(
     return RecognitionService(
         db=vector_search_service.db,
         deepface_service=deepface_service,
-        qdrant_service=vector_search_service,
+        vector_search_service=vector_search_service,
         minio_service=minio_service,
     )
 
