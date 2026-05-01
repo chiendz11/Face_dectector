@@ -55,6 +55,23 @@ def test_vector_search_service_returns_no_match_below_threshold() -> None:
     assert result["metadata"] is None
 
 
+def test_vector_search_integration_enroll_then_search_match() -> None:
+    vector_search_service = VectorSearchService(match_threshold=0.8, embedding_dimensions=3)
+    enrolled_embedding = [0.5, 0.5, 0.707106]
+
+    vector_search_service.upsert_face_embedding(
+        "emp-010",
+        enrolled_embedding,
+        metadata={"source": "admin-enroll"},
+    )
+
+    result = vector_search_service.search_similar_face([0.5, 0.5, 0.707106])
+
+    assert result["match"] == "EMP-010"
+    assert result["score"] == 1.0
+    assert result["metadata"] == {"source": "admin-enroll"}
+
+
 def test_minio_service_returns_http_snapshot_url() -> None:
     service = MinioService(bucket_name="snapshots", endpoint="minio.internal:9000", public_endpoint="http://minio.internal:9000")
 
@@ -145,17 +162,17 @@ def test_employee_registry_service_rejects_blank_full_name(sqlite_session) -> No
 
 def test_recognition_service_returns_granted_for_known_face() -> None:
     deepface_service = DeepFaceService()
-    qdrant_service = VectorSearchService(match_threshold=0.8)
+    vector_search_service = VectorSearchService(match_threshold=0.8)
     minio_service = MinioService()
     recognition_service = RecognitionService(
         deepface_service=deepface_service,
-        qdrant_service=qdrant_service,
+        vector_search_service=vector_search_service,
         minio_service=minio_service,
     )
     image_bytes = b"known-employee"
     embedding = deepface_service.embed_face(image_bytes)
 
-    qdrant_service.upsert_face_embedding("emp-003", embedding)
+    vector_search_service.upsert_face_embedding("emp-003", embedding)
 
     response = recognition_service.recognize_face(
         filename="face.jpg",
@@ -173,7 +190,7 @@ def test_recognition_service_returns_granted_for_known_face() -> None:
 def test_recognition_service_returns_rejected_for_unknown_face() -> None:
     recognition_service = RecognitionService(
         deepface_service=DeepFaceService(),
-        qdrant_service=VectorSearchService(match_threshold=0.99),
+        vector_search_service=VectorSearchService(match_threshold=0.99),
         minio_service=MinioService(),
     )
 

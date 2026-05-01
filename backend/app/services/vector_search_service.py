@@ -17,8 +17,8 @@ DB_CIRCUIT_BREAKER = CircuitBreaker(
 class VectorSearchService:
     """Vector search / embedding persistence abstraction.
 
-    This service historically mirrored a Qdrant integration interface, but the
-    current implementation supports PostgreSQL + pgvector or an in-memory fallback.
+    The current implementation supports PostgreSQL + pgvector or an in-memory
+    fallback used by tests and local development flows.
     """
 
     def __init__(
