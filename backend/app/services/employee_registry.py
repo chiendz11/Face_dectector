@@ -23,6 +23,22 @@ class EmployeeRegistryService:
             for item in employees
         ]
 
+    def get_employee(self, employee_code: str) -> EmployeeRecord | None:
+        normalized_code = self._normalize_employee_code(employee_code)
+        record = (
+            self.db.query(Employee)
+            .filter(Employee.employee_code == normalized_code)
+            .first()
+        )
+        if record is None:
+            return None
+
+        return EmployeeRecord(
+            employee_code=record.employee_code,
+            full_name=record.full_name,
+            department=record.department,
+        )
+
     def create_employee(self, employee: EmployeeCreate) -> EmployeeRecord:
         employee_code = self._normalize_employee_code(employee.employee_code)
         full_name = employee.full_name.strip()

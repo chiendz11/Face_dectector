@@ -21,6 +21,13 @@ class EmployeeDeleteResponse(BaseModel):
     deleted: bool
 
 
+class EmployeeFaceEnrollResponse(BaseModel):
+    employee_code: str
+    enrolled: bool
+    embedding_dimensions: int
+    message: str
+
+
 class RecognitionResult(BaseModel):
     matched: bool
     employee_code: str | None = None

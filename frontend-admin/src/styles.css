@@ -119,6 +119,12 @@ button.button {
   cursor: pointer;
 }
 
+button.button-small {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
 button.button-secondary {
   background: #f4f7fb;
   color: #33415c;
@@ -127,6 +133,21 @@ button.button-secondary {
 .status-error {
   margin-top: 16px;
   color: #9b2c2c;
+}
+
+.status-success {
+  margin-top: 16px;
+  color: #1f7a46;
+}
+
+.enroll-inline-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.enroll-inline-form input[type="file"] {
+  max-width: 220px;
 }
 
 table {
