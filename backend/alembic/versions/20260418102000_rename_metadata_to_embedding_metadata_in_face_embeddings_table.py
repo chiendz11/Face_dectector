@@ -1,7 +1,7 @@
 """rename metadata to embedding_metadata in face_embeddings table
 
 Revision ID: 20260418102000
-Revises: 0002_add_dedupe_key_to_recognition_events
+Revises: 0002_recog_dedupe_key
 Create Date: 2026-04-18 10:20:00
 
 """
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260418102000"
-down_revision = "0002_add_dedupe_key_to_recognition_events"
+down_revision = "0002_recog_dedupe_key"
 branch_labels = None
 depends_on = None
 

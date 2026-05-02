@@ -2,7 +2,7 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision = "0000_enable_pgvector_extension"
+revision = "0000_pgvector_ext"
 down_revision = None
 branch_labels = None
 depends_on = None

@@ -7,8 +7,8 @@ except ImportError:
     Vector = None
 
 # revision identifiers, used by Alembic.
-revision = "0001_create_employees_and_recognition_events"
-down_revision = "0000_enable_pgvector_extension"
+revision = "0001_employees_events"
+down_revision = "0000_pgvector_ext"
 branch_labels = None
 
 
