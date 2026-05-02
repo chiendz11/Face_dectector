@@ -221,7 +221,7 @@ jobs:
         run: pip install -r requirements-ci.txt
 
       - name: Run edge-client tests
-        run: pytest tests
+        run: python -m pytest tests
 
   docker-builds:
     runs-on: ubuntu-latest
