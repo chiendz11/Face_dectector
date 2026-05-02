@@ -87,24 +87,28 @@ class VectorSearchService:
 
         if self.read_db is not None:
             def query_best_match() -> dict:
+                distance_expr = FaceEmbedding.embedding.cosine_distance(embedding).label("distance")
                 statement = (
-                    select(FaceEmbedding)
-                    .order_by(FaceEmbedding.embedding.cosine_distance(embedding))
+                    select(
+                        FaceEmbedding.employee_code,
+                        FaceEmbedding.embedding_metadata,
+                        distance_expr,
+                    )
+                    .order_by(distance_expr)
                     .limit(1)
                 )
-                result = self.read_db.execute(statement).scalar_one_or_none()
-                if result is None:
+                row = self.read_db.execute(statement).first()
+                if row is None:
                     return {"match": None, "score": 0.0, "metadata": None}
 
-                distance = result.embedding.cosine_distance(embedding)
-                confidence = round(max(0.0, 1.0 - float(distance)), 6)
+                confidence = round(max(0.0, 1.0 - float(row.distance)), 6)
                 if confidence < self.match_threshold:
                     return {"match": None, "score": 0.0, "metadata": None}
 
                 return {
-                    "match": result.employee_code,
+                    "match": row.employee_code,
                     "score": confidence,
-                    "metadata": result.embedding_metadata,
+                    "metadata": row.embedding_metadata,
                 }
 
             return DB_CIRCUIT_BREAKER.call(
