@@ -209,10 +209,6 @@ def test_admin_enroll_face_rejects_empty_file(sqlite_session) -> None:
 
 def test_admin_enroll_face_upserts_on_second_enroll(sqlite_session) -> None:
     """Enrolling the same employee twice must overwrite the old embedding (upsert)."""
-    app = FastAPI()
-    app.include_router(admin_router, prefix="/api")
-    client = TestClient(app)
-
     employee_registry = EmployeeRegistryService(sqlite_session)
     employee_registry.create_employee(
         EmployeeCreate(employee_code="emp-104", full_name="Pham Van D", department="Ops")
