@@ -68,3 +68,31 @@ def test_recognize_face_returns_bad_request_for_empty_file() -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "image_bytes must not be empty"
+
+
+def test_recognize_face_returns_rejected_when_no_match_found() -> None:
+    app = FastAPI()
+    app.include_router(vision_router, prefix="/api")
+    client = TestClient(app)
+    recognition_service = RecognitionService(
+        deepface_service=DeepFaceService(),
+        vector_search_service=VectorSearchService(match_threshold=0.99),
+        minio_service=MinioService(),
+    )
+    client.app.dependency_overrides[get_recognition_service] = lambda: recognition_service
+
+    response = client.post(
+        "/api/vision/recognize",
+        data={"device_name": "side-gate-01"},
+        files={"file": ("unknown-face.jpg", b"unknown-face", "image/jpeg")},
+    )
+
+    client.app.dependency_overrides.clear()
+
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "rejected"
+    assert payload["result"]["matched"] is False
+    assert payload["result"]["employee_code"] is None
+    assert payload["result"]["confidence"] == 0.0

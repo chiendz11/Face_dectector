@@ -79,6 +79,36 @@ def test_admin_create_employee_rejects_duplicate_code(sqlite_session) -> None:
     assert response.json()["detail"] == "employee EMP-101 already exists"
 
 
+def test_admin_delete_employee_returns_not_found_for_unknown_employee(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    response = client.delete("/api/admin/employees/EMP-404")
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "employee EMP-404 was not found"
+
+
+def test_admin_delete_employee_rejects_blank_employee_code(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    response = client.delete("/api/admin/employees/%20%20")
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "employee_code must not be empty"
+
+
 def test_admin_enroll_face_upserts_embedding(sqlite_session) -> None:
     app = FastAPI()
     app.include_router(admin_router, prefix="/api")

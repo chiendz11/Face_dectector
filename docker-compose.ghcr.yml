@@ -29,8 +29,7 @@ services:
       - "80"
 
   nginx:
-    build:
-      context: ./nginx
+    image: "${IMAGE_HOST:-ghcr.io}/${REGISTRY_ORG}/face-detector-nginx:${IMAGE_TAG}"
     restart: unless-stopped
     depends_on:
       - backend
@@ -39,7 +38,7 @@ services:
       - "80:80"
 
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}

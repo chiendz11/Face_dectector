@@ -80,6 +80,49 @@ def test_minio_service_returns_http_snapshot_url() -> None:
     assert snapshot_url == "http://minio.internal:9000/snapshots/main-gate/face.jpg"
 
 
+def test_minio_service_uploads_to_local_s3_when_enabled(monkeypatch) -> None:
+    uploaded = {}
+    state = {"head_calls": 0, "create_bucket_calls": 0}
+
+    class FakeLocalS3Client:
+        def head_bucket(self, **kwargs) -> None:
+            state["head_calls"] += 1
+            raise RuntimeError("bucket missing")
+
+        def create_bucket(self, **kwargs) -> None:
+            state["create_bucket_calls"] += 1
+            uploaded["bucket"] = kwargs["Bucket"]
+
+        def put_object(self, **kwargs) -> None:
+            uploaded.update(kwargs)
+
+    class FakeBoto3:
+        @staticmethod
+        def client(service_name: str, **kwargs):
+            assert service_name == "s3"
+            assert kwargs["endpoint_url"] == "http://minio.internal:9000"
+            assert kwargs["aws_access_key_id"] == "minioadmin"
+            assert kwargs["aws_secret_access_key"] == "minio-secret"
+            return FakeLocalS3Client()
+
+    monkeypatch.setattr(minio_module, "boto3", FakeBoto3())
+    service = MinioService(
+        bucket_name="snapshots",
+        endpoint="minio.internal:9000",
+        public_endpoint="http://minio.public:9000",
+        access_key="minioadmin",
+        secret_key="minio-secret",
+        use_s3_api=True,
+    )
+
+    snapshot_url = service.upload_snapshot("main-gate/face.jpg", b"binary-image")
+
+    assert snapshot_url == "http://minio.public:9000/snapshots/main-gate/face.jpg"
+    assert uploaded["Bucket"] == "snapshots"
+    assert uploaded["Key"] == "main-gate/face.jpg"
+    assert state == {"head_calls": 1, "create_bucket_calls": 1}
+
+
 def test_minio_service_returns_s3_snapshot_url_when_bucket_configured(monkeypatch) -> None:
     uploaded = {}
     presigned = {}

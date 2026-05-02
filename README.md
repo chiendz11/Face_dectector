@@ -105,6 +105,12 @@ project-root/
 - `http://your-server-domain/api/health`: backend health
 - `edge-client`: entrance kiosk flow
 
+## API Contract And Integration Smoke Test
+
+- API request and response contracts now live in `docs/api-contract.yml` as the source-of-truth contract file.
+- Local or CI compose-backed smoke test lives in `scripts/ci-integration-test.sh`.
+- HTTP happy-path assertions now run in `backend/tests/integration/test_live_api.py`, while the shell script is responsible for infra bring-up, Alembic migration, and service readiness checks.
+
 ## Run With Docker
 
 ### Server stack

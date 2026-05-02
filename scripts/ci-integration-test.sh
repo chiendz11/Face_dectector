@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+export COMPOSE_FILE_PATH="${COMPOSE_FILE_PATH:-docker-compose.yml}"
+
 load_env_file() {
   local env_file="$1"
   local line=""
@@ -62,58 +65,52 @@ wait_for_command() {
 
 cleanup() {
   echo "Tearing down Docker Compose integration environment..."
-  docker compose down --volumes --remove-orphans || true
+  docker compose -f "$COMPOSE_FILE_PATH" down --volumes --remove-orphans || true
   restore_env
 }
 trap cleanup EXIT
 
 echo "Starting Docker Compose integration environment..."
-docker compose up -d --build
+docker compose -f "$COMPOSE_FILE_PATH" up -d
 
 wait_for_command \
   "Postgres" \
-  "docker compose exec -T db sh -lc 'pg_isready -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\"'"
+  "docker compose -f \"$COMPOSE_FILE_PATH\" exec -T db sh -lc 'pg_isready -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\"'"
 
 wait_for_command \
   "Redis" \
-  "test \"\$(docker compose exec -T redis redis-cli ping | tr -d '\\r')\" = 'PONG'"
+  "test \"\$(docker compose -f \"$COMPOSE_FILE_PATH\" exec -T redis redis-cli ping | tr -d '\\r')\" = 'PONG'"
 
-echo "Bootstrapping employee table for integration smoke test..."
-docker compose exec -T db sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<"SQL"
-CREATE TABLE IF NOT EXISTS employees (
-  id SERIAL PRIMARY KEY,
-  employee_code VARCHAR(32) NOT NULL UNIQUE,
-  full_name VARCHAR(128) NOT NULL,
-  department VARCHAR(64),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS ix_employees_employee_code ON employees (employee_code);
-SQL'
+echo "Running Alembic migrations against Docker Compose Postgres..."
+docker compose -f "$COMPOSE_FILE_PATH" exec -T backend alembic upgrade head
+
+wait_for_command \
+  "pgvector extension" \
+  "test \"\$(docker compose -f \"$COMPOSE_FILE_PATH\" exec -T db sh -lc 'psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -Atc \"SELECT extname FROM pg_extension WHERE extname = '''\''vector'''\''\"' | tr -d '\\r')\" = 'vector'"
 
 wait_for_command \
   "admin health endpoint" \
   "curl --silent --fail http://localhost/api/admin/health"
 
-echo "Requesting JWT token..."
-LOGIN_RESPONSE="$(curl --silent --show-error --fail \
-  -X POST http://localhost/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}")"
-ACCESS_TOKEN="$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["access_token"])' "$LOGIN_RESPONSE")"
+export FACE_DETECTOR_BASE_URL="http://localhost"
+export FACE_DETECTOR_ADMIN_USERNAME="$ADMIN_USERNAME"
+export FACE_DETECTOR_ADMIN_PASSWORD="$ADMIN_PASSWORD"
+export FACE_DETECTOR_TIMEOUT_SECONDS="30"
 
-EMPLOYEE_CODE="CI-$(date +%s)"
-echo "Creating employee ${EMPLOYEE_CODE} through nginx -> backend -> Postgres..."
-CREATE_RESPONSE="$(curl --silent --show-error --fail \
-  -X POST http://localhost/api/admin/employees \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-  -H 'Content-Type: application/json' \
-  -d "{\"employee_code\":\"${EMPLOYEE_CODE}\",\"full_name\":\"CI Smoke Test\",\"department\":\"Platform\"}")"
-python3 -c 'import json, sys; payload = json.loads(sys.argv[1]); expected = sys.argv[2]; assert payload["employee_code"] == expected, payload' "$CREATE_RESPONSE" "$EMPLOYEE_CODE"
+if [ "${MINIO_USE_S3_API:-false}" = "true" ]; then
+  export FACE_DETECTOR_OBJECT_STORE_MODE="local-minio"
+  export FACE_DETECTOR_MINIO_ENDPOINT="${MINIO_PUBLIC_ENDPOINT}"
+  export FACE_DETECTOR_MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY}"
+  export FACE_DETECTOR_MINIO_SECRET_KEY="${MINIO_SECRET_KEY}"
+  export FACE_DETECTOR_MINIO_BUCKET="${MINIO_BUCKET}"
+else
+  export FACE_DETECTOR_OBJECT_STORE_MODE="none"
+fi
 
-echo "Listing employees through authenticated admin API..."
-LIST_RESPONSE="$(curl --silent --show-error --fail \
-  http://localhost/api/admin/employees \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}")"
-python3 -c 'import json, sys; payload = json.loads(sys.argv[1]); expected = sys.argv[2]; assert any(item["employee_code"] == expected for item in payload["items"]), payload' "$LIST_RESPONSE" "$EMPLOYEE_CODE"
+echo "Running pytest integration smoke suite against Docker Compose stack..."
+"$PYTHON_BIN" -m pytest \
+  backend/tests/integration/test_live_shared_smoke.py \
+  backend/tests/integration/test_live_sandbox_smoke.py \
+  -q -m integration
 
-echo "Integration smoke test passed."
+echo "Compose-backed integration smoke test passed."

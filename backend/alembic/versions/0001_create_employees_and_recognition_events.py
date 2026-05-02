@@ -8,8 +8,10 @@ except ImportError:
 
 # revision identifiers, used by Alembic.
 revision = "0001_create_employees_and_recognition_events"
-down_revision = None
+down_revision = "0000_enable_pgvector_extension"
 branch_labels = None
+
+
 def upgrade() -> None:
     op.create_table(
         "employees",
