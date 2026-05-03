@@ -32,6 +32,12 @@ on:
       - ".env.example"
       - ".github/workflows/**"
 
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+  packages: write
+
 jobs:
   validation:
     uses: ./.github/workflows/ci-validation-reusable.yml

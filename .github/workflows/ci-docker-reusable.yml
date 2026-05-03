@@ -17,12 +17,6 @@ on:
         required: false
         type: string
         default: .github/image-catalog.json
-
-permissions:
-  attestations: write
-  contents: read
-  id-token: write
-  packages: write
 jobs:
   docker-builds:
     name: docker-builds
