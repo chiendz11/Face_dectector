@@ -89,6 +89,17 @@ class RecognitionService:
 
         self.db.add(event)
 
+        # Flush first so that constraint violations (e.g. duplicate dedupe_key)
+        # raise IntegrityError here, before retry logic can wrap the second
+        # attempt in PendingRollbackError (SQLAlchemy 2.x behaviour).
+        try:
+            self.db.flush()
+        except IntegrityError as exc:
+            self.db.rollback()
+            if "dedupe_key" in str(exc).lower():
+                return
+            raise
+
         @retry_operation(
             max_attempts=settings.db_retry_attempts,
             initial_delay=settings.db_retry_backoff_seconds,
@@ -98,11 +109,6 @@ class RecognitionService:
 
         try:
             DB_CIRCUIT_BREAKER.call(attempt_commit)
-        except IntegrityError as exc:
-            self.db.rollback()
-            if "dedupe_key" in str(exc).lower():
-                return
-            raise
         except Exception:
             self.db.rollback()
             raise
