@@ -37,6 +37,8 @@ permissions:
   contents: read
   id-token: write
   packages: write
+  pull-requests: read
+  statuses: write
 
 jobs:
   validation:
