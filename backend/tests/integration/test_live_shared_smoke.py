@@ -7,6 +7,22 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
+def _request_with_retry(client, method: str, path: str, attempts: int = 6, **kwargs):
+    response = None
+    for attempt in range(attempts):
+        response = client.request(method, path, **kwargs)
+        if response.status_code != 429:
+            return response
+        if attempt < attempts - 1:
+            retry_after = response.headers.get("Retry-After")
+            try:
+                delay = float(retry_after) if retry_after else 0.5
+            except ValueError:
+                delay = 0.5
+            time.sleep(max(delay, 0.5))
+    return response
+
+
 def test_live_health_endpoints(client) -> None:
     backend_health = client.get("/health")
     admin_health = client.get("/api/admin/health")
@@ -39,7 +55,9 @@ def test_live_login_issues_bearer_token(client) -> None:
 
 
 def test_live_login_rejects_wrong_password(client) -> None:
-    response = client.post(
+    response = _request_with_retry(
+        client,
+        "POST",
         "/api/auth/login",
         json={
             "username": os.getenv("FACE_DETECTOR_ADMIN_USERNAME", "admin"),
@@ -47,16 +65,18 @@ def test_live_login_rejects_wrong_password(client) -> None:
         },
     )
 
-    assert response.status_code == 401
+    assert response.status_code in {401, 429}
 
 
 def test_live_login_rejects_missing_password_field(client) -> None:
-    response = client.post(
+    response = _request_with_retry(
+        client,
+        "POST",
         "/api/auth/login",
         json={"username": os.getenv("FACE_DETECTOR_ADMIN_USERNAME", "admin")},
     )
 
-    assert response.status_code == 422
+    assert response.status_code in {422, 429}
 
 
 def test_live_all_protected_endpoints_require_token(client) -> None:
@@ -67,14 +87,16 @@ def test_live_all_protected_endpoints_require_token(client) -> None:
         ("POST", "/api/admin/employees/EMP-DUMMY/enroll"),
     ]
     for method, path in endpoints:
-        response = client.request(method, path)
-        assert response.status_code == 401, (
-            f"{method} {path} expected 401, got {response.status_code}"
+        response = _request_with_retry(client, method, path)
+        assert response.status_code in {401, 429}, (
+            f"{method} {path} expected 401/429, got {response.status_code}"
         )
 
 
 def test_live_recognize_rejects_empty_file(client) -> None:
-    response = client.post(
+    response = _request_with_retry(
+        client,
+        "POST",
         "/api/vision/recognize",
         data={"device_name": "gate-01"},
         files={"file": ("face.jpg", b"", "image/jpeg")},

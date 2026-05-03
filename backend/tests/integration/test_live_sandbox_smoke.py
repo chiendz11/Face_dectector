@@ -59,16 +59,14 @@ def test_live_sandbox_enroll_empty_file_returns_400(client, auth_headers, live_a
         live_api.delete_employee(employee_code)
 
 
-def test_live_sandbox_recognize_unknown_face_is_rejected(client) -> None:
-    # Submit a face that has never been enrolled → should always be rejected
-    response = client.post(
-        "/api/vision/recognize",
-        data={"device_name": "test-gate"},
-        files={"file": ("unknown.jpg", b"totally-unknown-face-payload-xyz-123", "image/jpeg")},
+def test_live_sandbox_recognize_unknown_face_is_rejected(live_api) -> None:
+    # Submit a face that has never been enrolled → should always be rejected.
+    payload = live_api.recognize_face(
+        "unknown.jpg",
+        b"totally-unknown-face-payload-xyz-123",
+        "test-gate",
     )
 
-    assert response.status_code == 200
-    payload = response.json()
     assert payload["status"] == "rejected"
     assert payload["result"]["matched"] is False
     assert payload["result"]["employee_code"] is None

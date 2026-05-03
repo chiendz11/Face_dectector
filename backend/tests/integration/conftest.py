@@ -19,6 +19,36 @@ def _admin_password() -> str:
     return os.getenv("FACE_DETECTOR_ADMIN_PASSWORD", "local-admin-password")
 
 
+def _request_with_rate_limit_retry(
+    client: httpx.Client,
+    method: str,
+    path: str,
+    *,
+    attempts: int = 6,
+    default_delay_seconds: float = 0.5,
+    **kwargs,
+) -> httpx.Response:
+    last_response: httpx.Response | None = None
+    for attempt in range(attempts):
+        response = client.request(method, path, **kwargs)
+        last_response = response
+        if response.status_code != 429:
+            return response
+
+        if attempt == attempts - 1:
+            break
+
+        retry_after = response.headers.get("Retry-After")
+        try:
+            delay_seconds = float(retry_after) if retry_after else default_delay_seconds
+        except ValueError:
+            delay_seconds = default_delay_seconds
+        time.sleep(max(delay_seconds, default_delay_seconds))
+
+    assert last_response is not None
+    return last_response
+
+
 @pytest.fixture(scope="session")
 def client() -> httpx.Client:
     timeout = float(os.getenv("FACE_DETECTOR_TIMEOUT_SECONDS", "30"))
@@ -28,7 +58,9 @@ def client() -> httpx.Client:
 
 @pytest.fixture(scope="session")
 def auth_headers(client: httpx.Client) -> dict[str, str]:
-    response = client.post(
+    response = _request_with_rate_limit_retry(
+        client,
+        "POST",
         "/api/auth/login",
         json={"username": _admin_username(), "password": _admin_password()},
     )
@@ -46,7 +78,9 @@ class LiveApiSession:
         return f"{prefix}-{int(time.time())}"
 
     def create_employee(self, employee_code: str, full_name: str, department: str) -> dict:
-        response = self.client.post(
+        response = _request_with_rate_limit_retry(
+            self.client,
+            "POST",
             "/api/admin/employees",
             headers=self.auth_headers,
             json={
@@ -59,12 +93,19 @@ class LiveApiSession:
         return response.json()
 
     def list_employees(self) -> dict:
-        response = self.client.get("/api/admin/employees", headers=self.auth_headers)
+        response = _request_with_rate_limit_retry(
+            self.client,
+            "GET",
+            "/api/admin/employees",
+            headers=self.auth_headers,
+        )
         response.raise_for_status()
         return response.json()
 
     def enroll_face(self, employee_code: str, filename: str, face_bytes: bytes) -> dict:
-        response = self.client.post(
+        response = _request_with_rate_limit_retry(
+            self.client,
+            "POST",
             f"/api/admin/employees/{employee_code}/enroll",
             headers=self.auth_headers,
             files={"file": (filename, face_bytes, "image/jpeg")},
@@ -73,7 +114,9 @@ class LiveApiSession:
         return response.json()
 
     def recognize_face(self, filename: str, face_bytes: bytes, device_name: str) -> dict:
-        response = self.client.post(
+        response = _request_with_rate_limit_retry(
+            self.client,
+            "POST",
             "/api/vision/recognize",
             data={"device_name": device_name},
             files={"file": (filename, face_bytes, "image/jpeg")},
@@ -82,7 +125,9 @@ class LiveApiSession:
         return response.json()
 
     def delete_employee(self, employee_code: str) -> dict:
-        response = self.client.delete(
+        response = _request_with_rate_limit_retry(
+            self.client,
+            "DELETE",
             f"/api/admin/employees/{employee_code}",
             headers=self.auth_headers,
         )
