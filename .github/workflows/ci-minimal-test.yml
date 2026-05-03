@@ -1,12 +1,12 @@
-name: CI Test Defaults Reusable
+name: CI Test Permissions Reusable
 on:
   workflow_call:
 jobs:
-  test-with-defaults:
+  test-with-permissions:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Hello
-        run: echo "defaults work"
+        run: echo "permissions work"
