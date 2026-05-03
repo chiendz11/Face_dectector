@@ -13,7 +13,8 @@ on:
       - "scripts/**"
       - "terraform/**"
       - "docker-compose.yml"
-      - "docker-compose.ghcr.yml"
+      - "docker-compose.dev.yml"
+      - "docker-compose.ci.yml"
       - ".env.example"
       - ".github/workflows/**"
   push:
@@ -28,7 +29,8 @@ on:
       - "scripts/**"
       - "terraform/**"
       - "docker-compose.yml"
-      - "docker-compose.ghcr.yml"
+      - "docker-compose.dev.yml"
+      - "docker-compose.ci.yml"
       - ".env.example"
       - ".github/workflows/**"
 

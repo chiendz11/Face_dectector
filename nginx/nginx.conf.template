@@ -1,7 +1,7 @@
 events {}
 
 http {
-  limit_req_zone $binary_remote_addr zone=api_req:10m rate=5r/s;
+  ${NGINX_LIMIT_REQ_ZONE_DIRECTIVE}
 
   upstream backend_upstream {
     server backend:8000;
@@ -34,8 +34,8 @@ http {
     }
 
     location /api/ {
-      limit_req zone=api_req burst=10 nodelay;
-      limit_req_status 429;
+      ${NGINX_LIMIT_REQ_DIRECTIVE}
+      ${NGINX_LIMIT_REQ_STATUS_DIRECTIVE}
       proxy_pass http://backend_upstream;
       proxy_http_version 1.1;
       proxy_set_header Host $host;

@@ -1,7 +1,7 @@
 import pytest
 
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.e2e
 
 
 def test_live_production_read_only_admin_list(live_api) -> None:

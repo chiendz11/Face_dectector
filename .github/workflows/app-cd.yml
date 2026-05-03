@@ -568,13 +568,13 @@ jobs:
 
           case "$DEPLOYMENT_ENVIRONMENT" in
             sandbox)
-              SMOKE_TARGETS="backend/tests/integration/test_live_shared_smoke.py backend/tests/integration/test_live_sandbox_smoke.py"
+              SMOKE_TARGETS="backend/tests/e2e/test_live_shared_smoke.py backend/tests/e2e/test_live_sandbox_smoke.py"
               ;;
             staging)
-              SMOKE_TARGETS="backend/tests/integration/test_live_shared_smoke.py backend/tests/integration/test_live_staging_smoke.py"
+              SMOKE_TARGETS="backend/tests/e2e/test_live_shared_smoke.py backend/tests/e2e/test_live_staging_smoke.py"
               ;;
             production)
-              SMOKE_TARGETS="backend/tests/integration/test_live_shared_smoke.py backend/tests/integration/test_live_production_smoke.py"
+              SMOKE_TARGETS="backend/tests/e2e/test_live_shared_smoke.py backend/tests/e2e/test_live_production_smoke.py"
               ;;
             *)
               echo "Unsupported deployment environment: $DEPLOYMENT_ENVIRONMENT" >&2
@@ -582,4 +582,4 @@ jobs:
               ;;
           esac
 
-          python3 -m pytest -q -m integration $SMOKE_TARGETS
+          python3 -m pytest -q -m e2e $SMOKE_TARGETS

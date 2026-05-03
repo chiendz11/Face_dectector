@@ -1,90 +1,31 @@
 services:
   backend:
-    build:
-      context: ./backend
     restart: unless-stopped
     env_file:
       - .env
-    depends_on:
-      - db
-      - minio
-      - redis
     expose:
       - "8000"
 
   worker:
-    build:
-      context: ./backend
     command: celery -A app.worker.celery_app.celery_app worker --loglevel=info
     restart: unless-stopped
     env_file:
       - .env
-    depends_on:
-      - backend
-      - db
-      - redis
 
   frontend-admin:
-    build:
-      context: ./frontend-admin
     restart: unless-stopped
     expose:
       - "80"
 
   nginx:
-    build:
-      context: ./nginx
     restart: unless-stopped
     depends_on:
       - backend
       - frontend-admin
+    environment:
+      NGINX_RATE_LIMIT_ENABLED: ${NGINX_RATE_LIMIT_ENABLED:-true}
+      NGINX_RATE_LIMIT_ZONE_RATE: ${NGINX_RATE_LIMIT_ZONE_RATE:-5r/s}
+      NGINX_RATE_LIMIT_BURST: ${NGINX_RATE_LIMIT_BURST:-10}
+      NGINX_RATE_LIMIT_MODE: ${NGINX_RATE_LIMIT_MODE:-nodelay}
     ports:
       - "80:80"
-
-  db:
-    image: pgvector/pgvector:pg16
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-
-  db-backup:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    depends_on:
-      - db
-    environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_backups:/backups
-    entrypoint: [ "sh", "-c", "mkdir -p /backups && while true; do pg_dump -h db -U ${POSTGRES_USER} ${POSTGRES_DB} > /backups/backup-$(date +'%Y%m%d%H%M%S').sql; sleep 300; done" ]
-
-volumes:
-  postgres_data:
-  minio_data:
-  redis_data:
-  postgres_backups:

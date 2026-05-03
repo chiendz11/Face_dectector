@@ -4,7 +4,7 @@ import time
 import pytest
 
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.e2e
 
 
 def _request_with_retry(client, method: str, path: str, attempts: int = 6, **kwargs):

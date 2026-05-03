@@ -1,7 +1,7 @@
 import pytest
 
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.e2e
 
 
 def test_live_sandbox_full_employee_flow(live_api) -> None:
