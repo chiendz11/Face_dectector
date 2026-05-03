@@ -31,3 +31,44 @@ def test_live_sandbox_full_employee_flow(live_api) -> None:
 
     employee_list_after_delete = live_api.list_employees()
     assert all(item["employee_code"] != employee_code for item in employee_list_after_delete["items"])
+
+
+def test_live_sandbox_enroll_unknown_employee_returns_404(client, auth_headers) -> None:
+    response = client.post(
+        "/api/admin/employees/DOES-NOT-EXIST-999/enroll",
+        headers=auth_headers,
+        files={"file": ("face.jpg", b"fake-face-bytes", "image/jpeg")},
+    )
+
+    assert response.status_code == 404
+
+
+def test_live_sandbox_enroll_empty_file_returns_400(client, auth_headers, live_api) -> None:
+    employee_code = live_api.make_employee_code("EMPTY")
+    live_api.create_employee(employee_code, "Empty File Test", "Platform")
+
+    try:
+        response = client.post(
+            f"/api/admin/employees/{employee_code}/enroll",
+            headers=auth_headers,
+            files={"file": ("face.jpg", b"", "image/jpeg")},
+        )
+        assert response.status_code == 400
+        assert "empty" in response.json()["detail"].lower()
+    finally:
+        live_api.delete_employee(employee_code)
+
+
+def test_live_sandbox_recognize_unknown_face_is_rejected(client) -> None:
+    # Submit a face that has never been enrolled → should always be rejected
+    response = client.post(
+        "/api/vision/recognize",
+        data={"device_name": "test-gate"},
+        files={"file": ("unknown.jpg", b"totally-unknown-face-payload-xyz-123", "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "rejected"
+    assert payload["result"]["matched"] is False
+    assert payload["result"]["employee_code"] is None

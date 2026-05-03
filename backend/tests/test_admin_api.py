@@ -263,3 +263,110 @@ def test_admin_enroll_face_requires_authentication() -> None:
     )
 
     assert response.status_code == 401
+
+
+def test_admin_list_employees_requires_authentication() -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/api/admin/employees")
+
+    assert response.status_code == 401
+
+
+def test_admin_create_employee_requires_authentication() -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/admin/employees",
+        json={"employee_code": "EMP-999", "full_name": "Ghost", "department": "None"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_admin_delete_employee_requires_authentication() -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.delete("/api/admin/employees/EMP-999")
+
+    assert response.status_code == 401
+
+
+def test_admin_create_employee_rejects_blank_employee_code(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    response = client.post(
+        "/api/admin/employees",
+        json={"employee_code": "   ", "full_name": "Alice", "department": "IT"},
+    )
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "employee_code must not be empty"
+
+
+def test_admin_create_employee_allows_null_department(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    response = client.post(
+        "/api/admin/employees",
+        json={"employee_code": "emp-200", "full_name": "No Department"},
+    )
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    assert response.json()["employee_code"] == "EMP-200"
+    assert response.json()["department"] is None
+
+
+def test_admin_list_employees_returns_empty_list_when_no_employees(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    response = client.get("/api/admin/employees")
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0}
+
+
+def test_admin_list_employees_returns_multiple_employees_in_sorted_order(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    service = EmployeeRegistryService(sqlite_session)
+    service.create_employee(EmployeeCreate(employee_code="emp-z01", full_name="Zara", department="Sales"))
+    service.create_employee(EmployeeCreate(employee_code="emp-a01", full_name="Adam", department="IT"))
+    service.create_employee(EmployeeCreate(employee_code="emp-m50", full_name="Minh", department="Ops"))
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: service
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    response = client.get("/api/admin/employees")
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 3
+    codes = [e["employee_code"] for e in payload["items"]]
+    assert codes == sorted(codes)

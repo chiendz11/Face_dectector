@@ -1,4 +1,5 @@
 import os
+import time
 
 import pytest
 
@@ -35,3 +36,69 @@ def test_live_login_issues_bearer_token(client) -> None:
 
     assert payload["token_type"] == "bearer"
     assert payload["access_token"]
+
+
+def test_live_login_rejects_wrong_password(client) -> None:
+    response = client.post(
+        "/api/auth/login",
+        json={
+            "username": os.getenv("FACE_DETECTOR_ADMIN_USERNAME", "admin"),
+            "password": "completely-wrong-password",
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_live_login_rejects_missing_password_field(client) -> None:
+    response = client.post(
+        "/api/auth/login",
+        json={"username": os.getenv("FACE_DETECTOR_ADMIN_USERNAME", "admin")},
+    )
+
+    assert response.status_code == 422
+
+
+def test_live_all_protected_endpoints_require_token(client) -> None:
+    endpoints = [
+        ("GET", "/api/admin/employees"),
+        ("POST", "/api/admin/employees"),
+        ("DELETE", "/api/admin/employees/EMP-DUMMY"),
+        ("POST", "/api/admin/employees/EMP-DUMMY/enroll"),
+    ]
+    for method, path in endpoints:
+        response = client.request(method, path)
+        assert response.status_code == 401, (
+            f"{method} {path} expected 401, got {response.status_code}"
+        )
+
+
+def test_live_recognize_rejects_empty_file(client) -> None:
+    response = client.post(
+        "/api/vision/recognize",
+        data={"device_name": "gate-01"},
+        files={"file": ("face.jpg", b"", "image/jpeg")},
+    )
+
+    assert response.status_code == 400
+
+
+def test_live_create_employee_rejects_duplicate_code(client, auth_headers) -> None:
+    employee_code = f"DUP-{int(time.time())}"
+
+    client.post(
+        "/api/admin/employees",
+        headers=auth_headers,
+        json={"employee_code": employee_code, "full_name": "Duplicate A", "department": "Test"},
+    ).raise_for_status()
+
+    second = client.post(
+        "/api/admin/employees",
+        headers=auth_headers,
+        json={"employee_code": employee_code, "full_name": "Duplicate B", "department": "Test"},
+    )
+
+    # Cleanup regardless of assertion outcome
+    client.delete(f"/api/admin/employees/{employee_code}", headers=auth_headers)
+
+    assert second.status_code == 409
