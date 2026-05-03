@@ -3,6 +3,10 @@ name: CI Validation Reusable
 on:
   workflow_call:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   backend-lint:
     runs-on: ubuntu-latest
@@ -66,9 +70,6 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     needs: platform-validate
-    permissions:
-      contents: read
-      pull-requests: read
     steps:
       - name: Checkout source
         uses: actions/checkout@v4

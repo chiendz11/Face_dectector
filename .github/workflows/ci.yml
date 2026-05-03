@@ -5,13 +5,42 @@ on:
     branches:
       - master
     paths:
+      - "backend/**"
+      - "deploy/**"
+      - "frontend-admin/**"
+      - "edge-client/**"
+      - "nginx/**"
+      - "scripts/**"
+      - "terraform/**"
+      - "docker-compose.yml"
+      - "docker-compose.ghcr.yml"
+      - ".env.example"
       - ".github/workflows/**"
   push:
     branches:
       - master
     paths:
+      - "backend/**"
+      - "deploy/**"
+      - "frontend-admin/**"
+      - "edge-client/**"
+      - "nginx/**"
+      - "scripts/**"
+      - "terraform/**"
+      - "docker-compose.yml"
+      - "docker-compose.ghcr.yml"
+      - ".env.example"
       - ".github/workflows/**"
 
 jobs:
   validation:
-    uses: ./.github/workflows/ci-minimal-test.yml
+    uses: ./.github/workflows/ci-validation-reusable.yml
+    secrets: inherit
+
+  docker:
+    needs: validation
+    uses: ./.github/workflows/ci-docker-reusable.yml
+    with:
+      registry_org: ${{ github.repository_owner }}
+      image_tag: ${{ github.sha }}
+    secrets: inherit
