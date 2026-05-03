@@ -130,9 +130,7 @@ class TestSearchSimilarFace:
 
     def test_score_zero_returned_when_below_threshold(self):
         svc = _service(threshold=0.99)
-        # Two slightly different vectors: partial overlap but < 0.99 similarity
-        a = [1.0, 0.0, 0.0, 0.0]
-        b = [0.9, 0.1, 0.0, 0.0]  # cos_sim ≈ 0.994 after normalisation... let's use orthogonal
+        # Orthogonal vectors have cosine similarity == 0, which is below any positive threshold
         svc.upsert_face_embedding("EMP001", _unit_vec(0))
 
         result = svc.search_similar_face(_unit_vec(3))
