@@ -1,9 +1,12 @@
-name: CI Minimal Test Reusable
+name: CI Test Defaults Reusable
 on:
   workflow_call:
 jobs:
-  test:
+  test-with-defaults:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - name: Hello
-        run: echo "Reusable workflow_call works!"
+        run: echo "defaults work"
