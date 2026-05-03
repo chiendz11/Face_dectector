@@ -33,5 +33,9 @@ on:
       - ".github/workflows/**"
 
 jobs:
-  validation:
-    uses: ./.github/workflows/ci-minimal-test.yml
+  docker:
+    uses: ./.github/workflows/ci-docker-reusable.yml
+    with:
+      registry_org: ${{ github.repository_owner }}
+      image_tag: ${{ github.sha }}
+    secrets: inherit
