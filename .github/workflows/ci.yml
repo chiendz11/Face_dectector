@@ -34,5 +34,4 @@ on:
 
 jobs:
   validation:
-    uses: ./.github/workflows/ci-validation-reusable.yml
-    secrets: inherit
+    uses: ./.github/workflows/ci-minimal-test.yml
