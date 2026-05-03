@@ -263,7 +263,7 @@ def test_vector_search_returns_nearest_neighbor_among_multiple_employees() -> No
     result = service.search_similar_face([0.98, 0.02, 0.0])
 
     assert result["match"] == "EMP-020"
-    assert result["score"] > result.get("score", 0)
+    assert result["score"] > 0.99
 
 
 def test_vector_search_upsert_overwrites_existing_embedding() -> None:
