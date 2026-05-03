@@ -3,10 +3,6 @@ name: CI Validation Reusable
 on:
   workflow_call:
 
-permissions:
-  contents: read
-  pull-requests: read
-
 jobs:
   backend-lint:
     runs-on: ubuntu-latest
