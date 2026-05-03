@@ -36,11 +36,3 @@ jobs:
   validation:
     uses: ./.github/workflows/ci-validation-reusable.yml
     secrets: inherit
-
-  docker:
-    needs: validation
-    uses: ./.github/workflows/ci-docker-reusable.yml
-    with:
-      registry_org: ${{ github.repository_owner }}
-      image_tag: ${{ github.sha }}
-    secrets: inherit
