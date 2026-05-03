@@ -41,7 +41,6 @@ jobs:
     needs: validation
     uses: ./.github/workflows/ci-docker-reusable.yml
     with:
-      run_publish: ${{ github.event_name == 'push' }}
       registry_org: ${{ github.repository_owner }}
       image_tag: ${{ github.sha }}
     secrets: inherit
