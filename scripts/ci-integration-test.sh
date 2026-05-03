@@ -7,6 +7,15 @@ cd "$ROOT_DIR"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 export COMPOSE_FILE_PATH="${COMPOSE_FILE_PATH:-docker-compose.yml}"
 
+# Build the full `docker compose` invocation.
+# docker-compose.ci-override.yml disables nginx rate-limiting so automated
+# integration tests are not throttled by the production 5r/s limit.
+COMPOSE_ARGS="-f $COMPOSE_FILE_PATH"
+if [ -f "$ROOT_DIR/docker-compose.ci-override.yml" ]; then
+  COMPOSE_ARGS="$COMPOSE_ARGS -f $ROOT_DIR/docker-compose.ci-override.yml"
+fi
+COMPOSE_CMD="docker compose $COMPOSE_ARGS"
+
 load_env_file() {
   local env_file="$1"
   local line=""
@@ -65,28 +74,28 @@ wait_for_command() {
 
 cleanup() {
   echo "Tearing down Docker Compose integration environment..."
-  docker compose -f "$COMPOSE_FILE_PATH" down --volumes --remove-orphans || true
+  $COMPOSE_CMD down --volumes --remove-orphans || true
   restore_env
 }
 trap cleanup EXIT
 
 echo "Starting Docker Compose integration environment..."
-docker compose -f "$COMPOSE_FILE_PATH" up -d
+$COMPOSE_CMD up -d
 
 wait_for_command \
   "Postgres" \
-  "docker compose -f \"$COMPOSE_FILE_PATH\" exec -T db sh -lc 'pg_isready -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\"'"
+  "$COMPOSE_CMD exec -T db sh -lc 'pg_isready -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\"'"
 
 wait_for_command \
   "Redis" \
-  "test \"\$(docker compose -f \"$COMPOSE_FILE_PATH\" exec -T redis redis-cli ping | tr -d '\\r')\" = 'PONG'"
+  "test \"\$($COMPOSE_CMD exec -T redis redis-cli ping | tr -d '\\r')\" = 'PONG'"
 
 echo "Running Alembic migrations against Docker Compose Postgres..."
-docker compose -f "$COMPOSE_FILE_PATH" exec -T backend alembic upgrade head
+$COMPOSE_CMD exec -T backend alembic upgrade head
 
 wait_for_command \
   "pgvector extension" \
-  "test \"\$(docker compose -f \"$COMPOSE_FILE_PATH\" exec -T db sh -lc 'psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -Atc \"SELECT extname FROM pg_extension WHERE extname = '''\''vector'''\''\"' | tr -d '\\r')\" = 'vector'"
+  "test \"\$($COMPOSE_CMD exec -T db sh -lc 'psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -Atc \"SELECT extname FROM pg_extension WHERE extname = '''\''vector'''\''\"' | tr -d '\\r')\" = 'vector'"
 
 wait_for_command \
   "admin health endpoint" \

@@ -108,19 +108,23 @@ def test_live_recognize_rejects_empty_file(client) -> None:
 def test_live_create_employee_rejects_duplicate_code(client, auth_headers) -> None:
     employee_code = f"DUP-{int(time.time())}"
 
-    client.post(
+    _request_with_retry(
+        client,
+        "POST",
         "/api/admin/employees",
         headers=auth_headers,
         json={"employee_code": employee_code, "full_name": "Duplicate A", "department": "Test"},
     ).raise_for_status()
 
-    second = client.post(
+    second = _request_with_retry(
+        client,
+        "POST",
         "/api/admin/employees",
         headers=auth_headers,
         json={"employee_code": employee_code, "full_name": "Duplicate B", "department": "Test"},
     )
 
     # Cleanup regardless of assertion outcome
-    client.delete(f"/api/admin/employees/{employee_code}", headers=auth_headers)
+    _request_with_retry(client, "DELETE", f"/api/admin/employees/{employee_code}", headers=auth_headers)
 
     assert second.status_code == 409
