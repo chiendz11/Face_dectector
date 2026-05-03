@@ -31,7 +31,8 @@ jobs:
       id-token: write
       packages: write
     outputs:
-      digests_matrix: ${{ steps.resolve-digests.outputs.matrix }}
+      # Keep matrix valid on PR runs where resolve-digests is skipped.
+      digests_matrix: ${{ steps.resolve-digests.outputs.matrix || '[]' }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
