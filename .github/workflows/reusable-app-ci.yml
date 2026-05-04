@@ -231,15 +231,15 @@ jobs:
           image_tag: ${{ inputs.image_tag }}
           catalog_path: ${{ inputs.catalog_path }}
 
-      - name: Trivy vulnerability scan
-        uses: ./.github/actions/trivy-scan-images
+      - name: Generate SBOMs
+        uses: ./.github/actions/sbom-images
         with:
           image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
           image_tag: ${{ inputs.image_tag }}
           catalog_path: ${{ inputs.catalog_path }}
 
-      - name: Generate SBOMs
-        uses: ./.github/actions/sbom-images
+      - name: Trivy vulnerability scan
+        uses: ./.github/actions/trivy-scan-images
         with:
           image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
           image_tag: ${{ inputs.image_tag }}

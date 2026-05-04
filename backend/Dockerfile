@@ -9,6 +9,11 @@ RUN apt-get update \
 	&& apt-get install -y --no-install-recommends build-essential gcc g++ \
 	&& rm -rf /var/lib/apt/lists/*
 
+RUN python -m pip install --upgrade \
+	"pip>=25.1" \
+	"setuptools>=80.9.0" \
+	"wheel>=0.46.2"
+
 COPY requirements.txt ./requirements.txt
 RUN pip wheel --wheel-dir /wheels -r requirements.txt
 
@@ -27,6 +32,11 @@ RUN apt-get update \
 	  libxext6 \
 	  libxrender1 \
 	&& rm -rf /var/lib/apt/lists/*
+
+RUN python -m pip install --upgrade \
+	"pip>=25.1" \
+	"setuptools>=80.9.0" \
+	"wheel>=0.46.2"
 
 COPY requirements.txt ./requirements.txt
 COPY --from=builder /wheels /wheels
