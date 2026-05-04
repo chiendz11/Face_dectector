@@ -1,5 +1,30 @@
-# Sensitive workflow, IaC, and AWS trust surfaces
-/.github/workflows/* @chiendz11
+# Default owner for repository governance in a solo setup.
+* @chiendz11
+
+# App CI workflows and image-pipeline logic.
+/.github/workflows/app-*.yml @chiendz11
+/.github/workflows/reusable-app-*.yml @chiendz11
+/.github/actions/build-images/ @chiendz11
+/.github/actions/trivy-scan-images/ @chiendz11
+/.github/actions/sbom-images/ @chiendz11
+/.github/actions/sign-images/ @chiendz11
+/.github/image-catalog.json @chiendz11
+
+# Infra CI and trusted control-plane workflows.
+/.github/workflows/infra-*.yml @chiendz11
+/.github/workflows/reusable-infra-*.yml @chiendz11
+/.github/workflows/infrastructure.yml @chiendz11
+/.github/workflows/app-cd.yml @chiendz11
+/.github/workflows/gitops-staging.yml @chiendz11
+/.github/workflows/gitops-production.yml @chiendz11
+/.github/workflows/terraform-plan.yml @chiendz11
+/.github/workflows/terraform-plan-reusable.yml @chiendz11
+/.github/workflows/sandbox-*.yml @chiendz11
+
+# IaC and trust surfaces.
 /terraform/ @chiendz11
-/aws/ @chiendz11
+/deploy/ @chiendz11
+/nginx/ @chiendz11
 /scripts/ @chiendz11
+/docker-compose*.yml @chiendz11
+/.github/dependabot.yml @chiendz11

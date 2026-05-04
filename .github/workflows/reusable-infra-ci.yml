@@ -1,0 +1,52 @@
+name: Reusable Infra CI
+
+on:
+  workflow_call:
+
+jobs:
+  terraform-and-helm-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.6"
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive terraform
+
+      - name: Terraform init for SSM
+        working-directory: terraform/ssm
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform validate for SSM
+        working-directory: terraform/ssm
+        run: terraform validate
+
+      - name: Terraform init for EKS
+        working-directory: terraform/eks
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform validate for EKS
+        working-directory: terraform/eks
+        run: terraform validate
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - name: Lint Helm chart
+        run: helm lint deploy/helm/face-detector
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile workflow context helper
+        run: python -m py_compile scripts/resolve_workflow_context.py
