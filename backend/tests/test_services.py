@@ -80,6 +80,49 @@ def test_minio_service_returns_http_snapshot_url() -> None:
     assert snapshot_url == "http://minio.internal:9000/snapshots/main-gate/face.jpg"
 
 
+def test_minio_service_uploads_to_local_s3_when_enabled(monkeypatch) -> None:
+    uploaded = {}
+    state = {"head_calls": 0, "create_bucket_calls": 0}
+
+    class FakeLocalS3Client:
+        def head_bucket(self, **kwargs) -> None:
+            state["head_calls"] += 1
+            raise RuntimeError("bucket missing")
+
+        def create_bucket(self, **kwargs) -> None:
+            state["create_bucket_calls"] += 1
+            uploaded["bucket"] = kwargs["Bucket"]
+
+        def put_object(self, **kwargs) -> None:
+            uploaded.update(kwargs)
+
+    class FakeBoto3:
+        @staticmethod
+        def client(service_name: str, **kwargs):
+            assert service_name == "s3"
+            assert kwargs["endpoint_url"] == "http://minio.internal:9000"
+            assert kwargs["aws_access_key_id"] == "minioadmin"
+            assert kwargs["aws_secret_access_key"] == "minio-secret"
+            return FakeLocalS3Client()
+
+    monkeypatch.setattr(minio_module, "boto3", FakeBoto3())
+    service = MinioService(
+        bucket_name="snapshots",
+        endpoint="minio.internal:9000",
+        public_endpoint="http://minio.public:9000",
+        access_key="minioadmin",
+        secret_key="minio-secret",
+        use_s3_api=True,
+    )
+
+    snapshot_url = service.upload_snapshot("main-gate/face.jpg", b"binary-image")
+
+    assert snapshot_url == "http://minio.public:9000/snapshots/main-gate/face.jpg"
+    assert uploaded["Bucket"] == "snapshots"
+    assert uploaded["Key"] == "main-gate/face.jpg"
+    assert state == {"head_calls": 1, "create_bucket_calls": 1}
+
+
 def test_minio_service_returns_s3_snapshot_url_when_bucket_configured(monkeypatch) -> None:
     uploaded = {}
     presigned = {}
@@ -204,3 +247,209 @@ def test_recognition_service_returns_rejected_for_unknown_face() -> None:
     assert response.result.matched is False
     assert response.result.employee_code is None
     assert response.result.confidence == 0.0
+
+
+# ---------------------------------------------------------------------------
+# VectorSearchService — extended coverage
+# ---------------------------------------------------------------------------
+
+def test_vector_search_returns_nearest_neighbor_among_multiple_employees() -> None:
+    service = VectorSearchService(match_threshold=0.8, embedding_dimensions=3)
+    # emp-020 points toward [1, 0, 0]; emp-021 points toward [0, 1, 0]
+    service.upsert_face_embedding("emp-020", [1.0, 0.0, 0.0])
+    service.upsert_face_embedding("emp-021", [0.0, 1.0, 0.0])
+
+    # Query is close to emp-020
+    result = service.search_similar_face([0.98, 0.02, 0.0])
+
+    assert result["match"] == "EMP-020"
+    assert result["score"] > 0.99
+
+
+def test_vector_search_upsert_overwrites_existing_embedding() -> None:
+    service = VectorSearchService(match_threshold=0.8, embedding_dimensions=3)
+    service.upsert_face_embedding("emp-022", [1.0, 0.0, 0.0])
+    # Overwrite with orthogonal embedding
+    service.upsert_face_embedding("emp-022", [0.0, 1.0, 0.0])
+
+    # Old vector should no longer match
+    old_result = service.search_similar_face([1.0, 0.0, 0.0])
+    # New vector should match
+    new_result = service.search_similar_face([0.0, 1.0, 0.0])
+
+    assert old_result["match"] is None
+    assert new_result["match"] == "EMP-022"
+    assert new_result["score"] == 1.0
+
+
+def test_vector_search_rejects_empty_employee_code() -> None:
+    service = VectorSearchService(match_threshold=0.8, embedding_dimensions=3)
+
+    with pytest.raises(ValueError, match="employee_code must not be empty"):
+        service.upsert_face_embedding("   ", [0.1, 0.2, 0.3])
+
+
+def test_vector_search_returns_no_match_when_store_is_empty() -> None:
+    service = VectorSearchService(match_threshold=0.8, embedding_dimensions=3)
+
+    result = service.search_similar_face([0.1, 0.2, 0.3])
+
+    assert result["match"] is None
+    assert result["score"] == 0.0
+    assert result["metadata"] is None
+
+
+def test_vector_search_rejects_wrong_dimension_embedding() -> None:
+    service = VectorSearchService(match_threshold=0.8, embedding_dimensions=3)
+
+    with pytest.raises(ValueError, match="embedding dimensions must match"):
+        service.upsert_face_embedding("emp-023", [0.1, 0.2])  # 2 dims, expects 3
+
+
+# ---------------------------------------------------------------------------
+# EmployeeRegistryService — extended coverage
+# ---------------------------------------------------------------------------
+
+def test_employee_registry_returns_none_for_unknown_employee(sqlite_session) -> None:
+    service = EmployeeRegistryService(sqlite_session)
+
+    result = service.get_employee("DOES-NOT-EXIST")
+
+    assert result is None
+
+
+def test_employee_registry_delete_removes_employee(sqlite_session) -> None:
+    service = EmployeeRegistryService(sqlite_session)
+    service.create_employee(
+        EmployeeCreate(employee_code="emp-030", full_name="To Be Deleted", department="HR")
+    )
+
+    deleted = service.delete_employee("emp-030")
+
+    assert deleted is not None
+    assert deleted.employee_code == "EMP-030"
+    assert service.get_employee("EMP-030") is None
+    assert service.list_employees() == []
+
+
+def test_employee_registry_rejects_blank_employee_code(sqlite_session) -> None:
+    service = EmployeeRegistryService(sqlite_session)
+
+    with pytest.raises(ValueError, match="employee_code must not be empty"):
+        service.create_employee(
+            EmployeeCreate(employee_code="  ", full_name="Ghost", department="IT")
+        )
+
+
+def test_employee_registry_lists_multiple_employees_in_sorted_order(sqlite_session) -> None:
+    service = EmployeeRegistryService(sqlite_session)
+    service.create_employee(EmployeeCreate(employee_code="emp-z99", full_name="Zara", department="X"))
+    service.create_employee(EmployeeCreate(employee_code="emp-a01", full_name="Adam", department="X"))
+    service.create_employee(EmployeeCreate(employee_code="emp-m50", full_name="Minh", department="X"))
+
+    result = service.list_employees()
+    codes = [e.employee_code for e in result]
+
+    assert codes == sorted(codes)
+
+
+# ---------------------------------------------------------------------------
+# MinioService — extended coverage
+# ---------------------------------------------------------------------------
+
+def test_minio_service_bucket_already_exists_skips_create(monkeypatch) -> None:
+    uploaded = {}
+    state = {"head_calls": 0, "create_bucket_calls": 0}
+
+    class FakeLocalS3BucketExists:
+        def head_bucket(self, **kwargs) -> None:
+            state["head_calls"] += 1  # succeeds — no exception → bucket exists
+
+        def create_bucket(self, **kwargs) -> None:  # must NOT be called
+            state["create_bucket_calls"] += 1
+
+        def put_object(self, **kwargs) -> None:
+            uploaded.update(kwargs)
+
+    class FakeBoto3Exists:
+        @staticmethod
+        def client(service_name: str, **kwargs):
+            return FakeLocalS3BucketExists()
+
+    monkeypatch.setattr(minio_module, "boto3", FakeBoto3Exists())
+    service = MinioService(
+        bucket_name="snapshots",
+        endpoint="minio.internal:9000",
+        public_endpoint="http://minio.internal:9000",
+        access_key="minioadmin",
+        secret_key="minio-secret",
+        use_s3_api=True,
+    )
+
+    service.upload_snapshot("gate/face.jpg", b"image-data")
+
+    assert state["head_calls"] == 1
+    assert state["create_bucket_calls"] == 0
+    assert uploaded["Key"] == "gate/face.jpg"
+
+
+# ---------------------------------------------------------------------------
+# RecognitionService — extended coverage
+# ---------------------------------------------------------------------------
+
+def test_recognition_service_includes_snapshot_url_in_response() -> None:
+    deepface_service = DeepFaceService()
+    vector_search_service = VectorSearchService(match_threshold=0.8)
+    minio_service = MinioService(
+        bucket_name="snapshots",
+        endpoint="minio:9000",
+        public_endpoint="http://minio:9000",
+    )
+    recognition_service = RecognitionService(
+        deepface_service=deepface_service,
+        vector_search_service=vector_search_service,
+        minio_service=minio_service,
+    )
+    image_bytes = b"known-face-snapshot"
+    vector_search_service.upsert_face_embedding("emp-040", deepface_service.embed_face(image_bytes))
+
+    response = recognition_service.recognize_face(
+        filename="face.jpg",
+        image_bytes=image_bytes,
+        device_name="main-gate-02",
+    )
+
+    assert response.status == "granted"
+    assert response.result.snapshot_url is not None
+    assert "snapshots" in response.result.snapshot_url
+    assert "face.jpg" in response.result.snapshot_url
+
+
+def test_recognition_service_with_no_device_name_uses_fallback() -> None:
+    recognition_service = RecognitionService(
+        deepface_service=DeepFaceService(),
+        vector_search_service=VectorSearchService(match_threshold=0.99),
+        minio_service=MinioService(),
+    )
+
+    response = recognition_service.recognize_face(
+        filename="face.jpg",
+        image_bytes=b"some-face-bytes",
+        device_name=None,
+    )
+
+    assert response.device_name is None
+    assert response.result.snapshot_url is not None
+
+
+# ---------------------------------------------------------------------------
+# DeepFaceService — extended coverage
+# ---------------------------------------------------------------------------
+
+def test_deepface_service_returns_different_embeddings_for_different_inputs() -> None:
+    service = DeepFaceService()
+
+    embedding_a = service.embed_face(b"face-of-person-a")
+    embedding_b = service.embed_face(b"face-of-person-b")
+
+    assert embedding_a != embedding_b

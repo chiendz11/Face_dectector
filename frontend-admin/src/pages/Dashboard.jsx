@@ -12,16 +12,13 @@ export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
   const [status, setStatus] = useState(defaultSession.status);
   const [error, setError] = useState("");
+  const [enrollMessage, setEnrollMessage] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState({});
   const [credentials, setCredentials] = useState({ username: "admin", password: "admin" });
   const [newEmployee, setNewEmployee] = useState({ employee_code: "", full_name: "", department: "" });
 
-  const headers = useMemo(
-    () => ({
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    }),
-    [token],
-  );
+  const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+  const jsonHeaders = useMemo(() => ({ "Content-Type": "application/json", ...authHeaders }), [authHeaders]);
 
   useEffect(() => {
     if (token) {
@@ -36,7 +33,7 @@ export default function Dashboard() {
     try {
       const response = await fetch("/api/admin/employees", {
         method: "GET",
-        headers,
+        headers: authHeaders,
       });
 
       if (response.status === 401) {
@@ -51,6 +48,7 @@ export default function Dashboard() {
       const payload = await response.json();
       setEmployees(payload.items || []);
       setStatus("loaded");
+      setEnrollMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
@@ -87,6 +85,8 @@ export default function Dashboard() {
     localStorage.removeItem("admin_token");
     setToken("");
     setEmployees([]);
+    setSelectedFiles({});
+    setEnrollMessage("");
     setStatus(defaultSession.status);
     setError("");
   };
@@ -99,7 +99,7 @@ export default function Dashboard() {
     try {
       const response = await fetch("/api/admin/employees", {
         method: "POST",
-        headers,
+        headers: jsonHeaders,
         body: JSON.stringify(newEmployee),
       });
 
@@ -118,6 +118,52 @@ export default function Dashboard() {
       setStatus("loaded");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
+      setStatus("error");
+    }
+  };
+
+  const handleFileSelect = (employeeCode, file) => {
+    setSelectedFiles((prev) => ({ ...prev, [employeeCode]: file || null }));
+  };
+
+  const handleEnrollFace = async (event, employeeCode) => {
+    event.preventDefault();
+    setStatus("loading");
+    setError("");
+    setEnrollMessage("");
+
+    const selectedFile = selectedFiles[employeeCode];
+    if (!selectedFile) {
+      setError("Please select an image file before enrolling.");
+      setStatus("error");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeCode)}/enroll`, {
+        method: "POST",
+        headers: authHeaders,
+        body: formData,
+      });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail || "Enroll face failed");
+      }
+
+      setEnrollMessage(payload.message || `Face enrolled for ${employeeCode}.`);
+      setSelectedFiles((prev) => ({ ...prev, [employeeCode]: null }));
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enroll face failed");
       setStatus("error");
     }
   };
@@ -222,6 +268,7 @@ export default function Dashboard() {
                     <th>Code</th>
                     <th>Full name</th>
                     <th>Department</th>
+                    <th>Face enrollment</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -230,11 +277,28 @@ export default function Dashboard() {
                       <td>{employee.employee_code}</td>
                       <td>{employee.full_name}</td>
                       <td>{employee.department || "—"}</td>
+                      <td>
+                        <form
+                          className="enroll-inline-form"
+                          onSubmit={(event) => handleEnrollFace(event, employee.employee_code)}
+                        >
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) => handleFileSelect(employee.employee_code, event.target.files?.[0])}
+                          />
+                          <button type="submit" className="button button-small">
+                            Enroll
+                          </button>
+                        </form>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
+            {enrollMessage && <p className="status-success">{enrollMessage}</p>}
+            {error && <p className="status-error">{error}</p>}
           </section>
         </>
       )}

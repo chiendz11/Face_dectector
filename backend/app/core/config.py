@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     minio_public_endpoint: str = "http://localhost:9000"
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin"
+    minio_use_s3_api: bool = False
     minio_bucket: str = "face-snapshots"
     aws_s3_bucket: str | None = None
     aws_s3_region: str | None = None

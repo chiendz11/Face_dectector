@@ -2,8 +2,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = "0002_add_dedupe_key_to_recognition_events"
-down_revision = "0001_create_employees_and_recognition_events"
+revision = "0002_recog_dedupe_key"
+down_revision = "0001_employees_events"
 branch_labels = None
 
 def upgrade() -> None:
