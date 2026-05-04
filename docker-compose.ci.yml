@@ -21,10 +21,7 @@ services:
   nginx:
     image: "${IMAGE_HOST:-ghcr.io}/${REGISTRY_ORG}/face-detector-nginx:${IMAGE_TAG}"
     environment:
-      NGINX_RATE_LIMIT_ENABLED: ${NGINX_RATE_LIMIT_ENABLED:-false}
-      NGINX_RATE_LIMIT_ZONE_RATE: ${NGINX_RATE_LIMIT_ZONE_RATE:-5r/s}
-      NGINX_RATE_LIMIT_BURST: ${NGINX_RATE_LIMIT_BURST:-10}
-      NGINX_RATE_LIMIT_MODE: ${NGINX_RATE_LIMIT_MODE:-nodelay}
+      NGINX_RATE_LIMIT_ENABLED: "false"
 
   db:
     image: pgvector/pgvector:pg16
