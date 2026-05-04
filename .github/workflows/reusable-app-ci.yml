@@ -209,12 +209,65 @@ jobs:
       - name: Run edge-client tests
         run: python -m pytest tests
 
+  docker-image-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: app-security-scan
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Normalize image owner
+        id: image-meta
+        run: echo "owner=$(echo '${{ inputs.registry_org }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker images
+        uses: ./.github/actions/build-images
+        with:
+          image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
+          image_tag: ${{ inputs.image_tag }}
+          catalog_path: ${{ inputs.catalog_path }}
+
+      - name: Trivy vulnerability scan
+        uses: ./.github/actions/trivy-scan-images
+        with:
+          image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
+          image_tag: ${{ inputs.image_tag }}
+          catalog_path: ${{ inputs.catalog_path }}
+
+      - name: Generate SBOMs
+        uses: ./.github/actions/sbom-images
+        with:
+          image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
+          image_tag: ${{ inputs.image_tag }}
+          catalog_path: ${{ inputs.catalog_path }}
+
+      - name: Upload Trivy reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-reports
+          path: .artifacts/trivy
+          if-no-files-found: warn
+
+      - name: Upload SBOM reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-reports
+          path: .artifacts/sbom
+          if-no-files-found: warn
+
   docker-smoke-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs:
       - backend-unit-tests
       - backend-integration-tests
+      - docker-image-verify
       - frontend-admin-build
       - edge-client-tests
     steps:
