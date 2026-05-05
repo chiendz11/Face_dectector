@@ -14,6 +14,7 @@ on:
       - ".trivyignore"
       - ".env.example"
       - "scripts/ci-e2e-test.sh"
+      - "scripts/resolve_registry_digest.py"
       - ".github/image-catalog.json"
       - ".github/actions/build-images/**"
       - ".github/actions/load-images/**"

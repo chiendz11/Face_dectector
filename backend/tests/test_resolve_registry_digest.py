@@ -6,8 +6,6 @@ from pathlib import Path
 import json
 import urllib.error
 
-import pytest
-
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "scripts" / "resolve_registry_digest.py"
 SPEC = spec_from_file_location("resolve_registry_digest", MODULE_PATH)
