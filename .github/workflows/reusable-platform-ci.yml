@@ -40,7 +40,17 @@ jobs:
 
       - name: Lint GitHub Actions workflows
         run: |
-          mapfile -t lint_targets < <(grep -E '^\.github/(workflows/.+\.yml|actions/.+/action\.yml)$' .platform-changed-files || true)
+          mapfile -t lint_targets < <(
+            while IFS= read -r path; do
+              case "$path" in
+                .github/workflows/*.yml|.github/actions/*/action.yml)
+                  if [ -f "$path" ]; then
+                    printf '%s\n' "$path"
+                  fi
+                  ;;
+              esac
+            done < .platform-changed-files
+          )
 
           if [ "${#lint_targets[@]}" -eq 0 ]; then
             echo "No workflow or composite action changes detected."
