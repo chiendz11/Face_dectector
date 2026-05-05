@@ -20,21 +20,22 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   backend-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: backend
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: "pip"
@@ -50,19 +51,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: backend-lint
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
       - name: Run secret scan
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
@@ -86,9 +90,9 @@ jobs:
         run: pip-audit -r edge-client/requirements.txt --progress=off
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install frontend dependencies for audit
         run: |
@@ -104,15 +108,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: app-security-scan
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: backend
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: "pip"
@@ -125,25 +131,28 @@ jobs:
         run: pytest -m "not e2e and not integration" --tb=short -q --cov=app --cov-report=xml:coverage-unit.xml --cov-report=term-missing
 
       - name: Upload unit test coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-unit
           path: backend/coverage-unit.xml
           if-no-files-found: error
+          retention-days: 30
 
   backend-integration-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: app-security-scan
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: backend
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: "pip"
@@ -156,27 +165,30 @@ jobs:
         run: pytest -m integration --tb=short -q --cov=app --cov-report=xml:coverage-integration.xml --cov-report=term-missing
 
       - name: Upload integration test coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-integration
           path: backend/coverage-integration.xml
           if-no-files-found: error
+          retention-days: 30
 
   frontend-admin-build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: app-security-scan
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: frontend-admin
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: "frontend-admin/package-lock.json"
 
@@ -193,15 +205,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: app-security-scan
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: edge-client
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: "pip"
@@ -223,10 +237,10 @@ jobs:
       security-events: write
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Normalize image owner
         id: image-meta
@@ -300,26 +314,28 @@ jobs:
       - name: Upload Trivy SARIF to code scanning
         if: ${{ always() && hashFiles('.artifacts/trivy/combined.sarif') != '' && github.event.pull_request.head.repo.full_name == github.repository }}
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@0daab03d71ff584ef619d027a3fd9146679c5d84 # v3
         with:
           sarif_file: .artifacts/trivy/combined.sarif
           category: app-container-images
 
       - name: Upload Trivy reports
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: trivy-reports
           path: .artifacts/trivy
           if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload SBOM reports
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sbom-reports
           path: .artifacts/sbom
           if-no-files-found: warn
+          retention-days: 30
 
       - name: Save built Docker images
         if: ${{ always() }}
@@ -331,11 +347,12 @@ jobs:
 
       - name: Upload built image archives
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: docker-image-archives
           path: .artifacts/images
           if-no-files-found: warn
+          retention-days: 1
 
   docker-smoke-e2e:
     runs-on: ubuntu-latest
@@ -346,12 +363,15 @@ jobs:
       - docker-image-verify
       - frontend-admin-build
       - edge-client-tests
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Download built image archives
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: docker-image-archives
           path: .artifacts/images
@@ -366,7 +386,7 @@ jobs:
           catalog_path: ${{ inputs.catalog_path }}
 
       - name: Set up Python for e2e smoke tests
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: "pip"

@@ -91,7 +91,7 @@ jobs:
       ARGOCD_NAMESPACE: argocd
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.environment == 'sandbox' && (inputs.source_ref_name || github.ref_name) || github.event.repository.default_branch }}
@@ -221,7 +221,7 @@ jobs:
             --role-production-arn "$AWS_ROLE_PRODUCTION_ARN"
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ steps.context.outputs.aws_role_arn }}
           role-session-name: gha-bootstrap-${{ github.run_id }}
@@ -259,7 +259,7 @@ jobs:
 
       - name: Set up Terraform
         if: steps.cluster.outputs.exists == 'true'
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: "1.6.6"
 

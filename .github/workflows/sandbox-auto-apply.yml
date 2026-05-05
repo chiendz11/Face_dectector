@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Evaluate sandbox deployment policy
         id: gate
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const allowedLabels = ['deploy-sandbox', 'deploy-preview'];
@@ -69,7 +69,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Enforce one sandbox per owner
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           OWNER_LOGIN: ${{ needs.evaluate-policy.outputs.owner_login }}
           PR_NUMBER: ${{ needs.evaluate-policy.outputs.pr_number }}

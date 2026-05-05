@@ -117,7 +117,7 @@ What changed:
 - workflow-level default permissions were added
 - elevated scopes were left only on jobs that actually need them
 - `security-events: write` was added only where SARIF upload requires it
-- release lanes keep `id-token`, `attestations`, `packages`, and `artifact-metadata` only where needed
+- release lanes keep `id-token`, `attestations`, and `packages` only where needed
 
 Enterprise value:
 
@@ -329,23 +329,26 @@ This records:
 
 #### GitHub artifact attestations
 
-The trusted release lane now generates:
+The trusted release lane generates GitHub-native attestations via `actions/attest@v4` when
+the repository supports it. A `check-attestation-support` capability gate (using the GitHub
+REST API) detects private user-owned repositories and gracefully skips attestation with a
+warning rather than failing the release. This ensures the lane is portable across personal,
+organization, and enterprise account types without workflow changes.
 
-- build provenance attestation with `actions/attest@v4`
-- SBOM attestation with `actions/attest@v4`
+The caller workflow grants:
 
-The caller workflow now grants:
-
-- `artifact-metadata: write`
 - `attestations: write`
 - `id-token: write`
 - `packages: write`
 
+Cosign-based signing and SBOM attestation run unconditionally regardless of GitHub
+attestation capability.
+
 #### Post-attestation verification
 
-The trusted release lane now verifies the generated attestations with:
-
-- `gh attestation verify`
+The trusted release lane verifies Cosign signatures and SBOM attestations after signing.
+GitHub attestation verification (`gh attestation verify`) applies only when the capability
+gate allows it.
 
 #### Post-sign verification
 
@@ -428,6 +431,8 @@ toward an enterprise operating model.
 - release provenance artifact generation
 - GitHub build provenance and SBOM attestations in the trusted release lane
 - Cosign sign plus verification of signatures and attestations
+- GitHub attestation capability gate for portable private/org/enterprise support
+- SHA-pinned external actions across all workflow and composite action files
 
 ### Still Candidate For Future Tightening
 
@@ -435,6 +440,7 @@ toward an enterprise operating model.
 - add exception expiry dates for temporary risk acceptance
 - verify provenance and signatures again at GitOps promotion or deploy time
 - add richer policy coverage for Helm, container image metadata, and release rules
+- add GHCR image lifecycle cleanup to prune SHA-tagged images and Cosign signature tags
 
 ## Recommended Next Steps
 

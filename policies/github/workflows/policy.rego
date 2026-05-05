@@ -68,6 +68,14 @@ uses_mutable_ref(uses) if {
   ref == "latest"
 }
 
+uses_mutable_ref(uses) if {
+  not startswith(uses, "./")
+  contains(uses, "@")
+  parts := split(uses, "@")
+  ref := parts[count(parts) - 1]
+  regex.match(`^v\d+(\.\d+)*$`, ref)
+}
+
 mutable_ref_exception(uses) if {
   some exception in data.exceptions.github.mutable_refs
   exception.subject == uses
