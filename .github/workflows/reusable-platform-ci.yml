@@ -1,0 +1,79 @@
+name: Reusable Platform CI
+
+on:
+  workflow_call:
+
+jobs:
+  workflow-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Lint GitHub Actions workflows
+        run: |
+          docker run --rm \
+            -v "${PWD}:/workdir" \
+            -w /workdir \
+            rhysd/actionlint:1.7.8
+
+  platform-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install platform validation helpers
+        run: python -m pip install pyyaml
+
+      - name: Validate YAML manifests and governance files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          yaml_files = [
+              Path('.github/dependabot.yml'),
+              *Path('.github/workflows').glob('*.yml'),
+              *Path('.github/actions').glob('*/action.yml'),
+          ]
+
+          for path in yaml_files:
+              with path.open('r', encoding='utf-8') as handle:
+                  yaml.safe_load(handle)
+
+          codeowners = Path('.github/CODEOWNERS').read_text(encoding='utf-8')
+          required_entries = [
+              '/.github/workflows/platform-*.yml',
+              '/.github/workflows/reusable-platform-*.yml',
+          ]
+
+          for entry in required_entries:
+              if entry not in codeowners:
+                  raise SystemExit(f'Missing CODEOWNERS entry: {entry}')
+          PY
+
+      - name: Validate JSON configs
+        run: python -m json.tool .github/image-catalog.json > /dev/null
+
+      - name: Validate shell helpers
+        run: |
+          bash -n scripts/generate-env-from-ssm.sh
+          bash -n scripts/ci-e2e-test.sh
+          bash -n scripts/ci-integration-test.sh
+
+      - name: Compile workflow helper scripts
+        run: |
+          python -m py_compile \
+            scripts/resolve_workflow_context.py \
+            scripts/resolve_registry_digest.py \
+            scripts/update_gitops_image_locks.py \
+            scripts/cleanup_sandbox_aws_orphans.py \
+            scripts/render_sandbox_status_comment.py

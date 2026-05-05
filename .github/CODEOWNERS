@@ -10,6 +10,10 @@
 /.github/actions/sign-images/ @chiendz11
 /.github/image-catalog.json @chiendz11
 
+# Platform CI and workflow governance.
+/.github/workflows/platform-*.yml @chiendz11
+/.github/workflows/reusable-platform-*.yml @chiendz11
+
 # Infra CI and trusted control-plane workflows.
 /.github/workflows/infra-*.yml @chiendz11
 /.github/workflows/reusable-infra-*.yml @chiendz11
