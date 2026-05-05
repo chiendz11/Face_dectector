@@ -20,7 +20,6 @@ on:
       - ".github/actions/sign-images/**"
 
 permissions:
-  artifact-metadata: write
   attestations: write
   contents: read
   id-token: write
@@ -33,7 +32,7 @@ jobs:
   publish:
     uses: ./.github/workflows/reusable-app-release.yml
     with:
-      enable_github_attestations: "true"
+      enable_github_attestations: true
       registry_org: ${{ github.repository_owner }}
       image_tag: ${{ github.sha }}
     secrets: inherit

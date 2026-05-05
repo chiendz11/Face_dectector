@@ -64,9 +64,11 @@ jobs:
           BACKEND_DIGEST=$(python scripts/resolve_registry_digest.py --repository "${OWNER}/face-detector-backend" --reference "$IMAGE_TAG" --username "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD")
           FRONTEND_DIGEST=$(python scripts/resolve_registry_digest.py --repository "${OWNER}/face-detector-admin" --reference "$IMAGE_TAG" --username "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD")
           NGINX_DIGEST=$(python scripts/resolve_registry_digest.py --repository "${OWNER}/face-detector-nginx" --reference "$IMAGE_TAG" --username "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD")
-          echo "backend_digest=$BACKEND_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "frontend_digest=$FRONTEND_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "nginx_digest=$NGINX_DIGEST" >> "$GITHUB_OUTPUT"
+          {
+            echo "backend_digest=$BACKEND_DIGEST"
+            echo "frontend_digest=$FRONTEND_DIGEST"
+            echo "nginx_digest=$NGINX_DIGEST"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Update staging image digests
         if: steps.branch-head.outputs.skip != 'true'
@@ -95,4 +97,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add deploy/helm/face-detector/values-staging.yaml
           git commit -m "gitops: promote staging ${IMAGE_TAG} [skip ci]"
-          git push origin HEAD:${TARGET_BRANCH}
+          git push origin "HEAD:${TARGET_BRANCH}"

@@ -27,6 +27,7 @@ on:
       - ".github/workflows/reusable-infra-*.yml"
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
   security-events: write

@@ -5,8 +5,8 @@ on:
     inputs:
       enable_github_attestations:
         required: false
-        type: string
-        default: ""
+        type: boolean
+        default: false
       registry_org:
         required: true
         type: string
@@ -136,9 +136,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: publish-images
-    if: needs.publish-images.outputs.matrix != '' && inputs.enable_github_attestations == 'true'
+    if: needs.publish-images.outputs.matrix != '' && inputs.enable_github_attestations
     permissions:
-      artifact-metadata: write
       attestations: write
       contents: read
       id-token: write
