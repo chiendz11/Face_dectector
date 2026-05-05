@@ -102,8 +102,8 @@ jobs:
             sbom=".artifacts/sbom/${name}.spdx.json"
 
             MATRIX=$(echo "$MATRIX" | jq -c \
-              --arg n "$name" --arg s "$subject" --arg d "$digest" --arg sbom "$sbom" \
-              '. + [{"name": $n, "subject_name": $s, "subject_digest": $d, "sbom_path": $sbom}]')
+              --arg n "$name" --arg repo "$repo" --arg d "$digest" --arg sbom "$sbom" \
+              '. + [{"name": $n, "repository": $repo, "subject_digest": $d, "sbom_path": $sbom}]')
             PUBLISHED_IMAGES=$(echo "$PUBLISHED_IMAGES" | jq -c \
               --arg n "$name" --arg r "$subject" --arg t "$IMAGE_TAG" --arg d "$digest" \
               '. + [{"name": $n, "repository": $r, "tag": $t, "digest": $d}]')
@@ -130,6 +130,7 @@ jobs:
         with:
           name: published-oci-artifacts
           path: .artifacts
+          include-hidden-files: true
           if-no-files-found: error
 
   attest-published-images:
@@ -147,6 +148,10 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.publish-images.outputs.matrix) }}
     steps:
+      - name: Normalize image owner
+        id: image-meta
+        run: echo "owner=$(echo '${{ inputs.registry_org }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       - name: Download publish reports
         uses: actions/download-artifact@v4
         with:
@@ -156,14 +161,14 @@ jobs:
       - name: Generate build provenance attestation
         uses: actions/attest@v4
         with:
-          subject-name: ${{ matrix.subject_name }}
+          subject-name: ghcr.io/${{ steps.image-meta.outputs.owner }}/${{ matrix.repository }}
           subject-digest: ${{ matrix.subject_digest }}
           push-to-registry: true
 
       - name: Generate SBOM attestation
         uses: actions/attest@v4
         with:
-          subject-name: ${{ matrix.subject_name }}
+          subject-name: ghcr.io/${{ steps.image-meta.outputs.owner }}/${{ matrix.repository }}
           subject-digest: ${{ matrix.subject_digest }}
           sbom-path: ${{ matrix.sbom_path }}
           push-to-registry: true
@@ -173,7 +178,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh attestation verify \
-            "oci://${{ matrix.subject_name }}@${{ matrix.subject_digest }}" \
+            "oci://ghcr.io/${{ steps.image-meta.outputs.owner }}/${{ matrix.repository }}@${{ matrix.subject_digest }}" \
             -R "${{ github.repository }}" > /dev/null
 
       - name: Verify SBOM attestation
@@ -181,6 +186,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh attestation verify \
-            "oci://${{ matrix.subject_name }}@${{ matrix.subject_digest }}" \
+            "oci://ghcr.io/${{ steps.image-meta.outputs.owner }}/${{ matrix.repository }}@${{ matrix.subject_digest }}" \
             -R "${{ github.repository }}" \
             --predicate-type https://spdx.dev/Document/v2.3 > /dev/null
