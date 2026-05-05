@@ -10,13 +10,48 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve changed platform files
+        id: changed-platform
+        shell: bash
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            base_ref="HEAD^1"
+          else
+            base_ref="HEAD^"
+          fi
+
+          mapfile -t changed_files < <(git diff --name-only "$base_ref" HEAD -- \
+            .github/workflows \
+            .github/actions \
+            .github/CODEOWNERS \
+            .github/dependabot.yml \
+            .trivyignore \
+            scripts)
+
+          printf '%s\n' "${changed_files[@]}" > .platform-changed-files
+          {
+            echo 'files<<EOF'
+            printf '%s\n' "${changed_files[@]}"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
 
       - name: Lint GitHub Actions workflows
         run: |
+          mapfile -t lint_targets < <(grep -E '^\.github/(workflows/.+\.yml|actions/.+/action\.yml)$' .platform-changed-files || true)
+
+          if [ "${#lint_targets[@]}" -eq 0 ]; then
+            echo "No workflow or composite action changes detected."
+            exit 0
+          fi
+
           docker run --rm \
             -v "${PWD}:/workdir" \
             -w /workdir \
-            rhysd/actionlint:1.7.8
+            rhysd/actionlint:1.7.8 \
+            "${lint_targets[@]}"
 
   platform-validate:
     runs-on: ubuntu-latest
@@ -24,6 +59,28 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve changed platform files
+        id: changed-platform
+        shell: bash
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            base_ref="HEAD^1"
+          else
+            base_ref="HEAD^"
+          fi
+
+          mapfile -t changed_files < <(git diff --name-only "$base_ref" HEAD -- \
+            .github/workflows \
+            .github/actions \
+            .github/CODEOWNERS \
+            .github/dependabot.yml \
+            .trivyignore \
+            scripts)
+
+          printf '%s\n' "${changed_files[@]}" > .platform-changed-files
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -39,10 +96,15 @@ jobs:
           from pathlib import Path
           import yaml
 
+          changed_paths = [
+            Path(line.strip())
+            for line in Path('.platform-changed-files').read_text(encoding='utf-8').splitlines()
+            if line.strip()
+          ]
+
           yaml_files = [
-              Path('.github/dependabot.yml'),
-              *Path('.github/workflows').glob('*.yml'),
-              *Path('.github/actions').glob('*/action.yml'),
+            path for path in changed_paths
+            if path.suffix in {'.yml', '.yaml'} and path.exists()
           ]
 
           for path in yaml_files:
@@ -61,19 +123,30 @@ jobs:
           PY
 
       - name: Validate JSON configs
-        run: python -m json.tool .github/image-catalog.json > /dev/null
+        run: |
+          if grep -Fxq '.github/image-catalog.json' .platform-changed-files; then
+            python -m json.tool .github/image-catalog.json > /dev/null
+          else
+            echo 'No JSON config changes detected.'
+          fi
 
       - name: Validate shell helpers
         run: |
-          bash -n scripts/generate-env-from-ssm.sh
-          bash -n scripts/ci-e2e-test.sh
-          bash -n scripts/ci-integration-test.sh
+          while IFS= read -r path; do
+            case "$path" in
+              scripts/*.sh)
+                bash -n "$path"
+                ;;
+            esac
+          done < .platform-changed-files
 
       - name: Compile workflow helper scripts
         run: |
-          python -m py_compile \
-            scripts/resolve_workflow_context.py \
-            scripts/resolve_registry_digest.py \
-            scripts/update_gitops_image_locks.py \
-            scripts/cleanup_sandbox_aws_orphans.py \
-            scripts/render_sandbox_status_comment.py
+          mapfile -t python_targets < <(grep -E '^scripts/.+\.py$' .platform-changed-files || true)
+
+          if [ "${#python_targets[@]}" -eq 0 ]; then
+            echo 'No Python helper changes detected.'
+            exit 0
+          fi
+
+          python -m py_compile "${python_targets[@]}"

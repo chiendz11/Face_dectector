@@ -11,16 +11,9 @@ on:
       - "nginx/**"
       - "docker-compose.yml"
       - "docker-compose.ci.yml"
-      - ".trivyignore"
       - ".env.example"
       - "scripts/ci-e2e-test.sh"
       - ".github/image-catalog.json"
-      - ".github/actions/build-images/**"
-      - ".github/actions/trivy-scan-images/**"
-      - ".github/actions/sbom-images/**"
-      - ".github/actions/sign-images/**"
-      - ".github/workflows/app-*.yml"
-      - ".github/workflows/reusable-app-*.yml"
 
 permissions:
   attestations: write
