@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - devops/enterprise-ci-hardening
     paths:
       - "backend/**"
       - "frontend-admin/**"
@@ -14,6 +15,9 @@ on:
       - ".env.example"
       - "scripts/ci-e2e-test.sh"
       - ".github/image-catalog.json"
+      - ".github/workflows/app-release.yml"
+      - ".github/workflows/reusable-app-release.yml"
+      - ".github/actions/sign-images/**"
 
 permissions:
   artifact-metadata: write
