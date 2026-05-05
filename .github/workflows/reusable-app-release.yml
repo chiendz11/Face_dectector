@@ -3,6 +3,10 @@ name: Reusable App Release
 on:
   workflow_call:
     inputs:
+      enable_github_attestations:
+        required: false
+        type: string
+        default: ""
       registry_org:
         required: true
         type: string
@@ -14,10 +18,15 @@ on:
         type: string
         default: .github/image-catalog.json
 
+permissions:
+  contents: read
+
 jobs:
   publish-images:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      matrix: ${{ steps.resolve-digests.outputs.matrix }}
     permissions:
       attestations: write
       contents: read
@@ -93,8 +102,8 @@ jobs:
             sbom=".artifacts/sbom/${name}.spdx.json"
 
             MATRIX=$(echo "$MATRIX" | jq -c \
-              --arg s "$subject" --arg d "$digest" \
-              '. + [{"subject_name": $s, "subject_digest": $d}]')
+              --arg n "$name" --arg s "$subject" --arg d "$digest" --arg sbom "$sbom" \
+              '. + [{"name": $n, "subject_name": $s, "subject_digest": $d, "sbom_path": $sbom}]')
             PUBLISHED_IMAGES=$(echo "$PUBLISHED_IMAGES" | jq -c \
               --arg n "$name" --arg r "$subject" --arg t "$IMAGE_TAG" --arg d "$digest" \
               '. + [{"name": $n, "repository": $r, "tag": $t, "digest": $d}]')
@@ -104,6 +113,8 @@ jobs:
           done < <(jq -c '.[]' "$CATALOG")
 
           echo "$SIGN_TARGETS" > .artifacts/sign-targets.json
+          echo "{\"builder\":{\"repository\":\"${GITHUB_REPOSITORY}\",\"workflow\":\"${GITHUB_WORKFLOW}\",\"run_id\":\"${GITHUB_RUN_ID}\",\"run_attempt\":\"${GITHUB_RUN_ATTEMPT}\",\"ref\":\"${GITHUB_REF}\",\"sha\":\"${GITHUB_SHA}\"},\"release\":{\"image_tag\":\"${IMAGE_TAG}\",\"catalog_path\":\"${CATALOG}\",\"images\":${PUBLISHED_IMAGES}}}" \
+            > .artifacts/release-provenance.json
           echo "{\"commit\": \"${IMAGE_TAG}\", \"images\": ${PUBLISHED_IMAGES}}" \
             > .artifacts/published-images.json
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
@@ -120,3 +131,57 @@ jobs:
           name: published-oci-artifacts
           path: .artifacts
           if-no-files-found: error
+
+  attest-published-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: publish-images
+    if: needs.publish-images.outputs.matrix != '' && inputs.enable_github_attestations == 'true'
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.publish-images.outputs.matrix) }}
+    steps:
+      - name: Download publish reports
+        uses: actions/download-artifact@v4
+        with:
+          name: published-oci-artifacts
+          path: .artifacts
+
+      - name: Generate build provenance attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ matrix.subject_name }}
+          subject-digest: ${{ matrix.subject_digest }}
+          push-to-registry: true
+
+      - name: Generate SBOM attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ matrix.subject_name }}
+          subject-digest: ${{ matrix.subject_digest }}
+          sbom-path: ${{ matrix.sbom_path }}
+          push-to-registry: true
+
+      - name: Verify build provenance attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify \
+            "oci://${{ matrix.subject_name }}@${{ matrix.subject_digest }}" \
+            -R "${{ github.repository }}" > /dev/null
+
+      - name: Verify SBOM attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify \
+            "oci://${{ matrix.subject_name }}@${{ matrix.subject_digest }}" \
+            -R "${{ github.repository }}" \
+            --predicate-type https://spdx.dev/Document/v2.3 > /dev/null

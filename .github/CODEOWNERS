@@ -5,6 +5,8 @@
 /.github/workflows/app-*.yml @chiendz11
 /.github/workflows/reusable-app-*.yml @chiendz11
 /.github/actions/build-images/ @chiendz11
+/.github/actions/load-images/ @chiendz11
+/.github/actions/save-images/ @chiendz11
 /.github/actions/trivy-scan-images/ @chiendz11
 /.github/actions/sbom-images/ @chiendz11
 /.github/actions/sign-images/ @chiendz11
@@ -13,6 +15,9 @@
 # Platform CI and workflow governance.
 /.github/workflows/platform-*.yml @chiendz11
 /.github/workflows/reusable-platform-*.yml @chiendz11
+/.github/actions/setup-conftest/ @chiendz11
+/policies/github/ @chiendz11
+/policies/data/ @chiendz11
 
 # Infra CI and trusted control-plane workflows.
 /.github/workflows/infra-*.yml @chiendz11
@@ -24,6 +29,7 @@
 /.github/workflows/terraform-plan.yml @chiendz11
 /.github/workflows/terraform-plan-reusable.yml @chiendz11
 /.github/workflows/sandbox-*.yml @chiendz11
+/policies/terraform/ @chiendz11
 
 # IaC and trust surfaces.
 /terraform/ @chiendz11

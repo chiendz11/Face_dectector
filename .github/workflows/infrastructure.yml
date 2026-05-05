@@ -105,6 +105,9 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ inputs.environment == 'sandbox' && format('infrastructure-sandbox-{0}', inputs.pull_request_number || format('{0}-{1}', inputs.owner_login || 'admin', inputs.source_ref_name || github.ref_name)) || format('infrastructure-{0}', inputs.environment) }}
   cancel-in-progress: false

@@ -1,0 +1,8 @@
+exceptions:
+  github:
+    mutable_refs: []
+  infra:
+    force_destroy_buckets: []
+    public_eks_endpoints: []
+    public_ingress_security_groups: []
+    skip_final_snapshots: []

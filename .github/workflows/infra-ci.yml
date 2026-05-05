@@ -7,32 +7,29 @@ on:
     paths:
       - "terraform/**"
       - "deploy/**"
+      - "policies/terraform/**"
+      - "policies/data/**"
       - "scripts/resolve_workflow_context.py"
+      - ".github/actions/setup-conftest/**"
       - ".github/workflows/infra-*.yml"
       - ".github/workflows/reusable-infra-*.yml"
-      - ".github/workflows/infrastructure.yml"
-      - ".github/workflows/app-cd.yml"
-      - ".github/workflows/terraform-plan.yml"
-      - ".github/workflows/terraform-plan-reusable.yml"
-      - ".github/workflows/sandbox-*.yml"
   push:
     branches:
       - master
     paths:
       - "terraform/**"
       - "deploy/**"
+      - "policies/terraform/**"
+      - "policies/data/**"
       - "scripts/resolve_workflow_context.py"
+      - ".github/actions/setup-conftest/**"
       - ".github/workflows/infra-*.yml"
       - ".github/workflows/reusable-infra-*.yml"
-      - ".github/workflows/infrastructure.yml"
-      - ".github/workflows/app-cd.yml"
-      - ".github/workflows/terraform-plan.yml"
-      - ".github/workflows/terraform-plan-reusable.yml"
-      - ".github/workflows/sandbox-*.yml"
 
 permissions:
   contents: read
   pull-requests: read
+  security-events: write
   statuses: write
 
 concurrency:

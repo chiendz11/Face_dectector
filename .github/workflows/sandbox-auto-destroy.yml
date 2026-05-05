@@ -9,6 +9,9 @@ on:
     branches:
       - master
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ format('infrastructure-sandbox-{0}', github.event.pull_request.number) }}
   cancel-in-progress: false

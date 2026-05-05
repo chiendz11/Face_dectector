@@ -11,6 +11,9 @@ on:
     branches:
       - master
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ format('sandbox-auto-apply-{0}', github.event.pull_request.head.ref) }}
   cancel-in-progress: true

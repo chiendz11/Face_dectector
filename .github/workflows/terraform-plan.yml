@@ -14,6 +14,9 @@ on:
       - ".github/workflows/terraform-plan.yml"
       - ".github/workflows/terraform-plan-reusable.yml"
 
+permissions:
+  contents: read
+
 jobs:
   evaluate-policy:
     runs-on: ubuntu-latest

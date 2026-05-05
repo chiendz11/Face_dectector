@@ -17,6 +17,9 @@ on:
         default: devops-admin-sandbox
         type: environment
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ format('sandbox-devops-verify-{0}-{1}-{2}', github.actor, github.ref_name, github.event.inputs.action || 'apply') }}
   cancel-in-progress: true

@@ -18,6 +18,9 @@ on:
         type: string
         default: .github/image-catalog.json
 
+permissions:
+  contents: read
+
 jobs:
   backend-lint:
     runs-on: ubuntu-latest
@@ -213,6 +216,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: app-security-scan
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -226,6 +232,13 @@ jobs:
 
       - name: Build Docker images
         uses: ./.github/actions/build-images
+        with:
+          image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
+          image_tag: ${{ inputs.image_tag }}
+          catalog_path: ${{ inputs.catalog_path }}
+
+      - name: Save built Docker images
+        uses: ./.github/actions/save-images
         with:
           image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
           image_tag: ${{ inputs.image_tag }}
@@ -245,6 +258,13 @@ jobs:
           image_tag: ${{ inputs.image_tag }}
           catalog_path: ${{ inputs.catalog_path }}
 
+      - name: Upload Trivy SARIF to code scanning
+        if: ${{ always() && github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .artifacts/trivy
+          category: app-container-images
+
       - name: Upload Trivy reports
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -261,6 +281,14 @@ jobs:
           path: .artifacts/sbom
           if-no-files-found: warn
 
+      - name: Upload built image archives
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-archives
+          path: .artifacts/images
+          if-no-files-found: warn
+
   docker-smoke-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -274,12 +302,20 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Download built image archives
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-archives
+          path: .artifacts/images
 
       - name: Normalize image owner
         id: image-meta
         run: echo "owner=$(echo '${{ inputs.registry_org }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Load previously built Docker images
+        uses: ./.github/actions/load-images
+        with:
+          catalog_path: ${{ inputs.catalog_path }}
 
       - name: Set up Python for e2e smoke tests
         uses: actions/setup-python@v5
@@ -290,13 +326,6 @@ jobs:
 
       - name: Install e2e smoke test dependencies
         run: python -m pip install -r backend/requirements-ci.txt
-
-      - name: Build Docker images
-        uses: ./.github/actions/build-images
-        with:
-          image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
-          image_tag: ${{ inputs.image_tag }}
-          catalog_path: ${{ inputs.catalog_path }}
 
       - name: Run compose-backed e2e smoke test
         env:

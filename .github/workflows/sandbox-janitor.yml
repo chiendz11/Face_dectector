@@ -19,6 +19,9 @@ on:
         required: false
         default: '48'
 
+permissions:
+  contents: read
+
 jobs:
   select-candidates:
     runs-on: ubuntu-latest
