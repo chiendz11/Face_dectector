@@ -81,8 +81,8 @@ jobs:
           OWNER: ${{ steps.image-meta.outputs.owner }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           CATALOG: ${{ inputs.catalog_path }}
-          REGISTRY_USERNAME: ${{ github.actor }}
-          REGISTRY_PASSWORD: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ secrets.GHCR_TOKEN != '' && (secrets.GHCR_USERNAME || github.repository_owner) || github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p .artifacts
           MATRIX='[]'
