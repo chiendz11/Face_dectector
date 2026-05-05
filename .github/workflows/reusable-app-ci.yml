@@ -218,6 +218,7 @@ jobs:
     timeout-minutes: 30
     needs: app-security-scan
     permissions:
+      actions: read
       contents: read
       security-events: write
     steps:
@@ -238,12 +239,8 @@ jobs:
           image_tag: ${{ inputs.image_tag }}
           catalog_path: ${{ inputs.catalog_path }}
 
-      - name: Save built Docker images
-        uses: ./.github/actions/save-images
-        with:
-          image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
-          image_tag: ${{ inputs.image_tag }}
-          catalog_path: ${{ inputs.catalog_path }}
+      - name: Reclaim Docker builder cache
+        run: docker builder prune -af
 
       - name: Generate SBOMs
         uses: ./.github/actions/sbom-images
@@ -259,11 +256,53 @@ jobs:
           image_tag: ${{ inputs.image_tag }}
           catalog_path: ${{ inputs.catalog_path }}
 
+      - name: Combine Trivy SARIF reports
+        if: ${{ always() && hashFiles('.artifacts/trivy/*.sarif') != '' }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report_paths = sorted(Path('.artifacts/trivy').glob('*.sarif'))
+          combined = None
+          results = []
+          rules = {}
+
+          for report_path in report_paths:
+            document = json.loads(report_path.read_text(encoding='utf-8'))
+            run = (document.get('runs') or [{}])[0]
+            driver = run.get('tool', {}).get('driver', {})
+
+            if combined is None:
+              combined = {
+                'version': document.get('version', '2.1.0'),
+                '$schema': document.get('$schema', 'https://json.schemastore.org/sarif-2.1.0.json'),
+                'runs': [run],
+              }
+              combined['runs'][0]['results'] = []
+              combined['runs'][0].setdefault('tool', {}).setdefault('driver', {})['rules'] = []
+
+            for rule in driver.get('rules', []):
+              rule_id = rule.get('id')
+              if rule_id and rule_id not in rules:
+                rules[rule_id] = rule
+
+            results.extend(run.get('results', []))
+
+          if combined is None:
+            raise SystemExit('No Trivy SARIF reports were generated.')
+
+          combined['runs'][0]['tool']['driver']['rules'] = list(rules.values())
+          combined['runs'][0]['results'] = results
+          Path('.artifacts/trivy/combined.sarif').write_text(json.dumps(combined), encoding='utf-8')
+          PY
+
       - name: Upload Trivy SARIF to code scanning
-        if: ${{ always() && github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ always() && hashFiles('.artifacts/trivy/combined.sarif') != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: .artifacts/trivy
+          sarif_file: .artifacts/trivy/combined.sarif
           category: app-container-images
 
       - name: Upload Trivy reports
@@ -281,6 +320,14 @@ jobs:
           name: sbom-reports
           path: .artifacts/sbom
           if-no-files-found: warn
+
+      - name: Save built Docker images
+        if: ${{ always() }}
+        uses: ./.github/actions/save-images
+        with:
+          image_host: ghcr.io/${{ steps.image-meta.outputs.owner }}
+          image_tag: ${{ inputs.image_tag }}
+          catalog_path: ${{ inputs.catalog_path }}
 
       - name: Upload built image archives
         if: ${{ always() }}

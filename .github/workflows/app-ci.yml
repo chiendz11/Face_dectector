@@ -24,6 +24,7 @@ on:
       - ".github/workflows/reusable-app-ci.yml"
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
   security-events: write
