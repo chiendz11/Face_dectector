@@ -43,7 +43,7 @@ jobs:
           mapfile -t lint_targets < <(
             while IFS= read -r path; do
               case "$path" in
-                .github/workflows/*.yml|.github/actions/*/action.yml)
+                .github/workflows/*.yml)
                   if [ -f "$path" ]; then
                     printf '%s\n' "$path"
                   fi

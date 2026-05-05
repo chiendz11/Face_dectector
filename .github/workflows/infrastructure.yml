@@ -72,14 +72,6 @@ on:
         options:
           - apply
           - destroy
-      cluster_name:
-        description: Deprecated. Sandbox cluster names are derived from the PR number and overrides are rejected.
-        required: false
-        default: ""
-      snapshot_bucket_name:
-        description: Deprecated. Sandbox snapshot buckets are derived from the PR number and overrides are rejected.
-        required: false
-        default: ""
       node_instance_type:
         description: Optional EKS node instance type override
         required: false
@@ -106,10 +98,6 @@ on:
         default: ""
       source_git_sha:
         description: Optional sandbox PR head commit SHA used for env_version when dispatching from the default branch
-        required: false
-        default: ""
-      owner_login:
-        description: Optional sandbox owner login used for cost-allocation tags
         required: false
         default: ""
       sandbox_role_override_arn:
@@ -220,13 +208,13 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           REPOSITORY_ID: ${{ github.repository_id }}
           GITHUB_REPOSITORY_SLUG: ${{ github.repository }}
-          INPUT_CLUSTER_NAME: ${{ inputs.cluster_name }}
-          INPUT_SNAPSHOT_BUCKET_NAME: ${{ inputs.snapshot_bucket_name }}
+          INPUT_CLUSTER_NAME: ${{ inputs.cluster_name || '' }}
+          INPUT_SNAPSHOT_BUCKET_NAME: ${{ inputs.snapshot_bucket_name || '' }}
           INPUT_NODE_INSTANCE_TYPE: ${{ inputs.node_instance_type }}
           INPUT_NODE_MIN_SIZE: ${{ inputs.node_min_size }}
           INPUT_NODE_MAX_SIZE: ${{ inputs.node_max_size }}
           INPUT_NODE_DESIRED_SIZE: ${{ inputs.node_desired_size }}
-          INPUT_OWNER_LOGIN: ${{ inputs.owner_login }}
+          INPUT_OWNER_LOGIN: ${{ github.event_name == 'workflow_dispatch' && (inputs.owner_login || github.actor) || inputs.owner_login }}
           GIT_SHA: ${{ inputs.source_git_sha || github.sha }}
           RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           GITHUB_TOKEN: ${{ github.token }}

@@ -448,9 +448,11 @@ jobs:
         id: image-meta
         run: |
           OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
-          echo "backend=ghcr.io/${OWNER}/face-detector-backend" >> "$GITHUB_OUTPUT"
-          echo "frontend=ghcr.io/${OWNER}/face-detector-admin" >> "$GITHUB_OUTPUT"
-          echo "nginx=ghcr.io/${OWNER}/face-detector-nginx" >> "$GITHUB_OUTPUT"
+          {
+            echo "backend=ghcr.io/${OWNER}/face-detector-backend"
+            echo "frontend=ghcr.io/${OWNER}/face-detector-admin"
+            echo "nginx=ghcr.io/${OWNER}/face-detector-nginx"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install kubectl and gettext
         if: steps.cluster.outputs.exists == 'true'
@@ -626,4 +628,5 @@ jobs:
               ;;
           esac
 
-          python3 -m pytest -q -m e2e $SMOKE_TARGETS
+          read -r -a smoke_targets <<< "$SMOKE_TARGETS"
+          python3 -m pytest -q -m e2e "${smoke_targets[@]}"
