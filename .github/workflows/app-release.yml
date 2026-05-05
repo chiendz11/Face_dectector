@@ -1,7 +1,7 @@
-name: App CI
+name: App Release
 
 on:
-  pull_request:
+  push:
     branches:
       - master
     paths:
@@ -23,16 +23,17 @@ on:
       - ".github/workflows/reusable-app-*.yml"
 
 permissions:
+  attestations: write
   contents: read
-  pull-requests: read
+  id-token: write
+  packages: write
 
 concurrency:
-  group: app-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: app-release-${{ github.ref }}
 
 jobs:
-  verify:
-    uses: ./.github/workflows/reusable-app-ci.yml
+  publish:
+    uses: ./.github/workflows/reusable-app-release.yml
     with:
       registry_org: ${{ github.repository_owner }}
       image_tag: ${{ github.sha }}
