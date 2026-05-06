@@ -6,3 +6,13 @@ exceptions:
     public_eks_endpoints: []
     public_ingress_security_groups: []
     skip_final_snapshots: []
+  kubernetes:
+    public_services:
+      - resource_name: nginx
+        service_types:
+          - LoadBalancer
+        allowed_ports:
+          - 80
+        allow_internet_facing: true
+        expires_on: ""
+    run_as_non_root_workloads: []

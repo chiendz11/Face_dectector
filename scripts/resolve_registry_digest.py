@@ -28,6 +28,13 @@ DEFAULT_TIMEOUT = 30
 DEFAULT_MAX_RETRIES = 3
 
 
+def require_https_url(value: str, label: str) -> str:
+    parsed = urllib.parse.urlparse(value)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError(f"{label} must be an https URL, got {value!r}")
+    return value
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Resolve an OCI manifest digest from a registry tag/reference.")
     parser.add_argument("--registry", default="https://ghcr.io", help="Registry base URL, e.g. https://ghcr.io")
@@ -69,6 +76,7 @@ def request_bearer_token(challenge_header: str, encoded_credentials: str, timeou
     realm = challenge.get("realm", "").strip()
     if not realm:
         return ""
+    realm = require_https_url(realm, "Bearer token realm")
 
     query = {
         key: value
@@ -84,17 +92,18 @@ def request_bearer_token(challenge_header: str, encoded_credentials: str, timeou
     request.add_header("Authorization", f"Basic {encoded_credentials}")
     request.add_header("Accept", "application/json")
 
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310
         payload = json.loads(response.read().decode("utf-8") or "{}")
 
     return str(payload.get("token") or payload.get("access_token") or "").strip()
 
 
 def _do_resolve(manifest_url: str, encoded_credentials: str, timeout: int) -> str:
+    manifest_url = require_https_url(manifest_url, "Manifest URL")
     basic_request = build_manifest_request(manifest_url, auth_header=f"Basic {encoded_credentials}")
 
     try:
-        with urllib.request.urlopen(basic_request, timeout=timeout) as response:
+        with urllib.request.urlopen(basic_request, timeout=timeout) as response:  # nosec B310
             return extract_digest(response.headers)
     except urllib.error.HTTPError as exc:
         if exc.code != 401:
@@ -105,7 +114,7 @@ def _do_resolve(manifest_url: str, encoded_credentials: str, timeout: int) -> st
             raise
 
         bearer_request = build_manifest_request(manifest_url, auth_header=f"Bearer {bearer_token}")
-        with urllib.request.urlopen(bearer_request, timeout=timeout) as response:
+        with urllib.request.urlopen(bearer_request, timeout=timeout) as response:  # nosec B310
             return extract_digest(response.headers)
 
 

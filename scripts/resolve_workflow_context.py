@@ -93,7 +93,7 @@ def list_open_pull_requests_for_ref(
         },
     )
 
-    with urllib.request.urlopen(request) as response:
+    with urllib.request.urlopen(request) as response:  # nosec B310
         return json.load(response)
 
 
@@ -123,7 +123,7 @@ def build_devops_sandbox_identity(owner_login: str, ref_name: str) -> tuple[str,
     owner_slug = slugify(owner_login or "admin", 24)
     branch_label = ref_name.split("/", 1)[1].strip() or "sandbox"
     branch_slug = slugify(branch_label, 24)
-    digest = hashlib.sha1(f"{owner_slug}:{ref_name}".encode("utf-8")).hexdigest()[:6]
+    digest = hashlib.sha256(f"{owner_slug}:{ref_name}".encode("utf-8")).hexdigest()[:6]
     sandbox_key = f"admin-{owner_slug[:16]}-{digest}"
     branch_path = f"{branch_slug}-{digest}"
     return sandbox_key, owner_slug, branch_path

@@ -15,7 +15,7 @@ services:
   frontend-admin:
     restart: unless-stopped
     expose:
-      - "80"
+      - "8080"
 
   nginx:
     restart: unless-stopped
@@ -28,4 +28,4 @@ services:
       NGINX_RATE_LIMIT_BURST: ${NGINX_RATE_LIMIT_BURST:-10}
       NGINX_RATE_LIMIT_MODE: ${NGINX_RATE_LIMIT_MODE:-nodelay}
     ports:
-      - "80:80"
+      - "80:8080"

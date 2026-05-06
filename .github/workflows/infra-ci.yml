@@ -7,6 +7,7 @@ on:
     paths:
       - "terraform/**"
       - "deploy/**"
+      - "policies/kubernetes/**"
       - "policies/terraform/**"
       - "policies/data/**"
       - "scripts/resolve_workflow_context.py"
@@ -19,6 +20,7 @@ on:
     paths:
       - "terraform/**"
       - "deploy/**"
+      - "policies/kubernetes/**"
       - "policies/terraform/**"
       - "policies/data/**"
       - "scripts/resolve_workflow_context.py"

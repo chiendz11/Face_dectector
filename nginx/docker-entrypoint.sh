@@ -26,6 +26,6 @@ export NGINX_LIMIT_REQ_STATUS_DIRECTIVE
 
 envsubst '${NGINX_LIMIT_REQ_ZONE_DIRECTIVE} ${NGINX_LIMIT_REQ_DIRECTIVE} ${NGINX_LIMIT_REQ_STATUS_DIRECTIVE}' \
   < /etc/nginx/templates/nginx.conf.template \
-  > /etc/nginx/nginx.conf
+  > /tmp/nginx.conf
 
-exec nginx -g 'daemon off;'
+exec nginx -c /tmp/nginx.conf -g 'daemon off;'

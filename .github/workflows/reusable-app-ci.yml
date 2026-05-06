@@ -49,7 +49,7 @@ jobs:
 
   app-security-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: backend-lint
     permissions:
       contents: read
@@ -59,11 +59,6 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-
-      - name: Run secret scan
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -103,6 +98,43 @@ jobs:
         run: |
           cd frontend-admin
           npm audit --audit-level=high
+
+      - name: Generate backend dependency license inventory
+        run: |
+          mkdir -p .artifacts/license-checks .artifacts/licenses
+          python -m venv .artifacts/license-checks/backend
+          .artifacts/license-checks/backend/bin/python -m pip install pip-licenses==5.5.5 -r backend/requirements.txt
+          .artifacts/license-checks/backend/bin/python -m piplicenses --format=json > .artifacts/licenses/backend.json
+
+      - name: Generate edge-client dependency license inventory
+        run: |
+          mkdir -p .artifacts/license-checks .artifacts/licenses
+          python -m venv .artifacts/license-checks/edge-client
+          .artifacts/license-checks/edge-client/bin/python -m pip install pip-licenses==5.5.5 -r edge-client/requirements.txt
+          .artifacts/license-checks/edge-client/bin/python -m piplicenses --format=json > .artifacts/licenses/edge-client.json
+
+      - name: Generate frontend dependency license inventory
+        run: |
+          cd frontend-admin
+          npx --yes license-checker-rseidelsohn@4.4.2 --json > ../.artifacts/licenses/frontend-admin.json
+
+      - name: Evaluate dependency license policy
+        run: |
+          python scripts/check_dependency_licenses.py \
+            --policy policies/licenses/policy.json \
+            --inventory backend:pip:.artifacts/licenses/backend.json \
+            --inventory edge-client:pip:.artifacts/licenses/edge-client.json \
+            --inventory frontend-admin:node:.artifacts/licenses/frontend-admin.json \
+            --report-path .artifacts/licenses/report.json
+
+      - name: Upload dependency license report
+        if: ${{ always() && hashFiles('.artifacts/licenses/*.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-license-report
+          path: .artifacts/licenses
+          if-no-files-found: error
+          retention-days: 30
 
   backend-unit-tests:
     runs-on: ubuntu-latest

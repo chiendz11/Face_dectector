@@ -414,6 +414,48 @@ Enterprise value:
 - fewer known OS-level CVEs in application container images
 - better Trivy scan results and lower release risk
 
+## 12. App CI Dependency License Governance Was Added
+
+Relevant files:
+
+- `.github/workflows/reusable-app-ci.yml`
+- `policies/licenses/policy.json`
+- `scripts/check_dependency_licenses.py`
+
+What changed:
+
+- App CI now generates license inventories for backend, edge-client, and frontend-admin dependencies
+- a repository-owned policy file now classifies licenses into allow, review, and disallow buckets
+- the checker blocks unknown or explicitly disallowed licenses before merge
+- the private `frontend-admin` workspace package is ignored explicitly so the gate does not fail on the repo's own unpublished package metadata
+- App CI uploads the inventory plus summary report as a build artifact for review evidence
+
+Enterprise value:
+
+- dependency license decisions are explicit instead of ad hoc
+- legal or procurement review can focus on a smaller review-only queue
+- merge-time enforcement catches license drift before release packaging
+
+## 13. Sandbox Reviewer Decision Rules Were Written Down
+
+Relevant files:
+
+- `docs/sandbox-decision-matrix.md`
+- `README.md`
+- `.github/workflows/sandbox-auto-apply.yml`
+
+What changed:
+
+- reviewer-facing guidance now defines when a PR belongs in the heavy sandbox lane versus the fast non-sandbox lane
+- the guidance documents that `deploy-sandbox` and `deploy-preview` stay reviewer-controlled labels, not an automatic preview for every PR
+- the written rules now capture the green-PR-lanes prerequisite, one-sandbox-per-owner quota, and mandatory auto-destroy lifecycle
+
+Enterprise value:
+
+- sandbox usage becomes more predictable and auditable
+- expensive PR environments are reserved for changes with real blast radius
+- the written policy matches the automation already enforced by the repository
+
 ## Current State
 
 The repository is now beyond a simple workflow-based CI/CD setup and is moving
