@@ -1,6 +1,7 @@
 exceptions:
   github:
     mutable_refs: []
+    trust_boundary_changes: []
   infra:
     force_destroy_buckets: []
     public_eks_endpoints: []
