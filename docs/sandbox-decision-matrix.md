@@ -8,6 +8,8 @@ This document tells reviewers when to use the expensive PR sandbox lane and when
 - `deploy-sandbox` is the preferred label. `deploy-preview` remains an accepted compatibility alias for the same reviewer intent.
 - Use the fast lane by default. Escalate to sandbox only when the blast radius justifies running the full PR environment.
 - Standard sandbox auto-apply only works for same-repository, non-draft PRs and now also waits for the relevant PR verification lanes to be green.
+- The `Sandbox Policy` PR check now enforces this guidance for same-repository non-draft PRs: heavy-lane changes fail the check until `deploy-sandbox` or `deploy-preview` is present.
+- `devops/*` branches are intentionally excluded from this label gate because they must use the protected manual `Sandbox DevOps Verify` or `Sandbox Workflow R&D` lanes instead.
 
 ## Heavy Lane: Apply A Sandbox Label
 
@@ -31,6 +33,7 @@ Keep the PR in the normal CI path when the change is local and the blast radius 
 ## Reviewer Checklist
 
 - Confirm the PR actually needs integrated runtime validation before spending sandbox capacity.
+- If `Sandbox Policy` fails, either add `deploy-sandbox` or `deploy-preview`, or explain why the PR should move to a lighter implementation slice.
 - Check that `App CI`, `Repo Security`, `Infra CI`, `Platform CI`, and `Terraform PR Plan` are green before expecting the sandbox to auto-apply.
 - Respect the one-sandbox-per-owner quota. If a sandbox is already active for the same owner, close or destroy the older one first.
 - Remove the deploy label when the sandbox is no longer needed.

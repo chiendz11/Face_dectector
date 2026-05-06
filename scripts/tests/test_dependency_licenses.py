@@ -143,7 +143,10 @@ class DependencyLicensePolicyTest(unittest.TestCase):
 
         self.assertIn("reusable-app-ci", workflow_text)
         self.assertIn("policies/licenses/policy\\.json", workflow_text)
-        self.assertIn("scripts/(check_dependency_licenses|update_gitops_image_locks)", workflow_text)
+        self.assertIn(
+            "scripts/(check_dependency_licenses|evaluate_sandbox_requirement|update_gitops_image_locks)",
+            workflow_text,
+        )
 
 if __name__ == "__main__":
     unittest.main()

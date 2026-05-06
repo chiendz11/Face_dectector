@@ -176,7 +176,7 @@ jobs:
         id: release-contracts
         shell: bash
         run: |
-          if grep -Eq '^(\.github/actions/sign-images/action\.yml|\.github/workflows/(gitops-staging|gitops-production|reusable-app-ci|reusable-app-release)\.yml|policies/licenses/policy\.json|scripts/(check_dependency_licenses|update_gitops_image_locks)\.py|scripts/tests/test_.*\.py)$' .platform-changed-files; then
+          if grep -Eq '^(\.github/actions/sign-images/action\.yml|\.github/workflows/(gitops-staging|gitops-production|reusable-app-ci|reusable-app-release|sandbox-policy)\.yml|policies/licenses/policy\.json|scripts/(check_dependency_licenses|evaluate_sandbox_requirement|update_gitops_image_locks)\.py|scripts/tests/test_.*\.py)$' .platform-changed-files; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"

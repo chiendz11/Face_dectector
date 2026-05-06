@@ -1,0 +1,227 @@
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+
+DEPLOY_LABELS = {"deploy-sandbox", "deploy-preview"}
+HEAVY_REASON_PATTERNS = {
+    "Touches infrastructure, deployment, workflow, policy, or ingress control paths": [
+        ".github/actions/**",
+        ".github/workflows/**",
+        "aws/**",
+        "deploy/**",
+        "nginx/**",
+        "policies/**",
+        "terraform/**",
+    ],
+    "Touches shared runtime or release contract files": [
+        ".github/CODEOWNERS",
+        ".github/dependabot.yml",
+        ".github/image-catalog.json",
+        ".trivyignore",
+        "backend/Dockerfile",
+        "docker-compose.ci.yml",
+        "docker-compose.edge.yml",
+        "docker-compose.yml",
+        "edge-client/Dockerfile",
+        "frontend-admin/Dockerfile",
+        "nginx/Dockerfile",
+        "scripts/ci-e2e-test.sh",
+        "scripts/ci-integration-test.sh",
+        "scripts/cleanup_sandbox_aws_orphans.py",
+        "scripts/generate-env-from-ssm.sh",
+        "scripts/render_sandbox_status_comment.py",
+        "scripts/resolve_registry_digest.py",
+        "scripts/resolve_workflow_context.py",
+        "scripts/update_gitops_image_locks.py",
+    ],
+    "Touches database or migration state paths": [
+        "backend/alembic.ini",
+        "backend/alembic/**",
+    ],
+}
+SERVICE_SURFACE_PATTERNS = {
+    "backend": ["backend/**"],
+    "frontend-admin": ["frontend-admin/**"],
+    "edge-client": ["edge-client/**"],
+    "nginx": ["nginx/**"],
+}
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Classify PR blast radius and enforce sandbox labels for heavy changes."
+    )
+    parser.add_argument("--event-path", required=True, help="Path to the GitHub event payload JSON.")
+    parser.add_argument(
+        "--changed-files-path",
+        required=True,
+        help="Path to a newline-delimited file containing changed repository paths.",
+    )
+    parser.add_argument("--report-path", help="Optional path to write the JSON evaluation report.")
+    return parser.parse_args(argv)
+
+
+def normalize_path(path: str) -> str:
+    return path.replace("\\", "/").strip().lstrip("./")
+
+
+def path_matches(path: str, patterns: list[str]) -> bool:
+    candidate = normalize_path(path)
+    return any(fnmatch.fnmatch(candidate, normalize_path(pattern)) for pattern in patterns)
+
+
+def load_event(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_changed_files(path: Path) -> list[str]:
+    return [
+        normalize_path(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if normalize_path(line)
+    ]
+
+
+def collect_reason_groups(changed_files: list[str]) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+
+    for reason, patterns in HEAVY_REASON_PATTERNS.items():
+        matches = [path for path in changed_files if path_matches(path, patterns)]
+        if matches:
+            groups.append(
+                {
+                    "reason": reason,
+                    "examples": matches[:5],
+                }
+            )
+
+    touched_surfaces = sorted(
+        surface
+        for surface, patterns in SERVICE_SURFACE_PATTERNS.items()
+        if any(path_matches(path, patterns) for path in changed_files)
+    )
+    if len(touched_surfaces) >= 2:
+        groups.append(
+            {
+                "reason": f"Cross-service change touches multiple application surfaces: {', '.join(touched_surfaces)}",
+                "examples": touched_surfaces,
+            }
+        )
+
+    return groups
+
+
+def evaluate_policy(event: dict[str, Any], changed_files: list[str]) -> dict[str, Any]:
+    pull_request = event["pull_request"]
+    repository = event["repository"]
+    branch = str(pull_request["head"]["ref"])
+    labels = sorted(str(label["name"]) for label in pull_request.get("labels", []))
+    has_deploy_label = any(label in DEPLOY_LABELS for label in labels)
+    is_devops_branch = branch.startswith("devops/")
+    is_draft = bool(pull_request.get("draft", False))
+    same_repo = pull_request["head"]["repo"]["full_name"] == repository["full_name"]
+    reason_groups = collect_reason_groups(changed_files)
+    classification = "heavy" if reason_groups else "fast"
+    requires_sandbox_label = classification == "heavy" and same_repo and not is_draft and not is_devops_branch
+    should_fail = requires_sandbox_label and not has_deploy_label
+
+    if classification == "fast":
+        decision = "pass"
+        summary = (
+            "This PR stays in the fast lane. It does not currently touch the high-blast-radius "
+            "paths that require a reviewer-managed sandbox label."
+        )
+    elif is_devops_branch:
+        decision = "advisory"
+        summary = (
+            "This is a heavy-lane PR, but it comes from a devops/* branch. Standard deploy labels are "
+            "not enforced here; use the protected manual Sandbox DevOps Verify or Sandbox Workflow R&D lanes instead."
+        )
+    elif is_draft:
+        decision = "advisory"
+        summary = (
+            "This is a heavy-lane draft PR. The sandbox label gate is delayed until the PR is ready for review."
+        )
+    elif not same_repo:
+        decision = "advisory"
+        summary = (
+            "This is a heavy-lane PR from a fork. The standard same-repository auto-apply sandbox path is unavailable, "
+            "so this check does not enforce a deploy label."
+        )
+    elif has_deploy_label:
+        decision = "pass"
+        summary = (
+            "This PR is in the heavy lane and already carries a sandbox deploy label, so the reviewer-managed sandbox "
+            "requirement is satisfied."
+        )
+    else:
+        decision = "fail"
+        summary = (
+            "This PR is in the heavy lane and is missing `deploy-sandbox` or `deploy-preview`. Add one of those labels "
+            "before asking the standard sandbox auto-apply flow to create a PR environment."
+        )
+
+    return {
+        "branch": branch,
+        "changedFiles": changed_files,
+        "classification": classification,
+        "decision": decision,
+        "hasDeployLabel": has_deploy_label,
+        "isDevopsBranch": is_devops_branch,
+        "isDraft": is_draft,
+        "reasonGroups": reason_groups,
+        "requiresSandboxLabel": requires_sandbox_label,
+        "sameRepo": same_repo,
+        "shouldFail": should_fail,
+        "summary": summary,
+    }
+
+
+def print_report(report: dict[str, Any]) -> None:
+    print(f"Sandbox policy decision: {report['decision']}")
+    print(f"Lane classification: {report['classification']}")
+    print(f"Branch: {report['branch']}")
+    print(f"Deploy label present: {report['hasDeployLabel']}")
+    print(report["summary"])
+
+    if report["reasonGroups"]:
+        print("Reasons:")
+        for group in report["reasonGroups"]:
+            examples = ", ".join(group.get("examples", [])[:3])
+            suffix = f" Example files: {examples}." if examples else ""
+            print(f"- {group['reason']}.{suffix}")
+
+
+def write_report(path: Path, report: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    report = evaluate_policy(
+        load_event(Path(args.event_path)),
+        load_changed_files(Path(args.changed_files_path)),
+    )
+    print_report(report)
+
+    if args.report_path:
+        write_report(Path(args.report_path), report)
+
+    if report["shouldFail"]:
+        print(
+            "Heavy-lane PRs need `deploy-sandbox` or `deploy-preview` before they can rely on the standard sandbox path.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

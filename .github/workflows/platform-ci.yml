@@ -14,11 +14,13 @@ on:
       - "scripts/resolve_workflow_context.py"
       - "scripts/resolve_registry_digest.py"
       - "scripts/update_gitops_image_locks.py"
+      - "scripts/evaluate_sandbox_requirement.py"
       - "scripts/cleanup_sandbox_aws_orphans.py"
       - "scripts/render_sandbox_status_comment.py"
       - "scripts/generate-env-from-ssm.sh"
       - "scripts/ci-e2e-test.sh"
       - "scripts/ci-integration-test.sh"
+      - "scripts/tests/**"
   push:
     branches:
       - master
@@ -32,11 +34,13 @@ on:
       - "scripts/resolve_workflow_context.py"
       - "scripts/resolve_registry_digest.py"
       - "scripts/update_gitops_image_locks.py"
+      - "scripts/evaluate_sandbox_requirement.py"
       - "scripts/cleanup_sandbox_aws_orphans.py"
       - "scripts/render_sandbox_status_comment.py"
       - "scripts/generate-env-from-ssm.sh"
       - "scripts/ci-e2e-test.sh"
       - "scripts/ci-integration-test.sh"
+      - "scripts/tests/**"
 
 permissions:
   contents: read
