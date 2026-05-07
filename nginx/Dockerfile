@@ -1,4 +1,4 @@
-FROM alpine:3.20 AS config
+FROM alpine:3.23 AS config
 
 WORKDIR /tmp/nginx
 COPY nginx.conf.template ./nginx.conf.template
