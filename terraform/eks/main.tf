@@ -4,7 +4,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 6.28.0, < 7.0.0"
     }
     helm = {
       source  = "hashicorp/helm"
@@ -136,10 +136,10 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.20"
 
-  cluster_name                             = var.cluster_name
-  cluster_version                          = var.cluster_version
-  cluster_endpoint_public_access           = true
-  cluster_endpoint_private_access          = true
+  name                                     = var.cluster_name
+  kubernetes_version                       = var.cluster_version
+  endpoint_public_access                   = true
+  endpoint_private_access                  = true
   enable_cluster_creator_admin_permissions = true
   enable_irsa                              = true
   tags                                     = local.resource_tags
@@ -147,15 +147,15 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = local.use_private_worker_subnets ? module.vpc.private_subnets : module.vpc.public_subnets
 
-  eks_managed_node_group_defaults = {
-    ami_type       = "AL2023_x86_64_STANDARD"
-    instance_types = [var.node_instance_type]
-    disk_size      = 30
+  eks_managed_node_groups = {
+    for group_name, group in local.eks_managed_node_groups : group_name => merge(group, {
+      ami_type       = "AL2023_x86_64_STANDARD"
+      instance_types = [var.node_instance_type]
+      disk_size      = 30
+    })
   }
 
-  eks_managed_node_groups = local.eks_managed_node_groups
-
-  cluster_addons = {
+  addons = {
     coredns    = {}
     kube-proxy = {}
     vpc-cni    = {}
