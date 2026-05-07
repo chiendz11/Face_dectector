@@ -125,7 +125,7 @@ jobs:
       TF_STATE_REGION: ${{ secrets.TF_STATE_REGION || secrets.AWS_REGION || 'ap-southeast-1' }}
     steps:
       - name: Checkout source
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.environment == 'sandbox' && inputs.source_ref_name != '' && (inputs.pull_request_number == '' || inputs.action == 'apply' || inputs.sandbox_role_override_arn != '') && inputs.source_ref_name || github.event.repository.default_branch }}
 
