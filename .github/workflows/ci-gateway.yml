@@ -63,9 +63,11 @@ jobs:
             esac
           done < .changed-files
 
-          echo "app_changed=${app_changed}" >> "$GITHUB_OUTPUT"
-          echo "platform_changed=${platform_changed}" >> "$GITHUB_OUTPUT"
-          echo "infra_changed=${infra_changed}" >> "$GITHUB_OUTPUT"
+          {
+            echo "app_changed=${app_changed}"
+            echo "platform_changed=${platform_changed}"
+            echo "infra_changed=${infra_changed}"
+          } >> "$GITHUB_OUTPUT"
 
   verify-app:
     needs: detect-changes
