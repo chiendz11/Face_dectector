@@ -36,8 +36,8 @@ class FaceRecognitionUser(HttpUser):
 
     @task
     def post_recognition_request(self) -> None:
-        image_path = random.choice(self.images)
-        device_name = random.choice(DEVICE_NAMES)
+        image_path = random.choice(self.images)  # nosec B311
+        device_name = random.choice(DEVICE_NAMES)  # nosec B311
 
         with image_path.open("rb") as image_file:
             files = {"file": (image_path.name, image_file, "image/jpeg")}

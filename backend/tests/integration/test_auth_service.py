@@ -64,8 +64,9 @@ class TestTokenRoundTrip:
 
     def test_tampered_token_raises_value_error(self, auth):
         token = auth.create_access_token(subject="admin")
-        # Flip the last character of the signature
-        tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+        header, payload, signature = token.split(".")
+        tampered_signature = ("A" if signature[0] != "A" else "B") + signature[1:]
+        tampered = ".".join((header, payload, tampered_signature))
         with pytest.raises(ValueError, match="[Ii]nvalid"):
             auth.verify_token(tampered)
 

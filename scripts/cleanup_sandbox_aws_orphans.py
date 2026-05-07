@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
-import subprocess
+import subprocess  # nosec B404
 import sys
 
 
@@ -10,7 +10,7 @@ def run_aws(region: str, aws_args: list[str], expect_json: bool = True, allow_mi
     if expect_json:
         command.extend(["--output", "json"])
 
-    completed = subprocess.run(command, capture_output=True, text=True)
+    completed = subprocess.run(command, capture_output=True, text=True)  # nosec B603
     if completed.returncode != 0:
         stderr = completed.stderr.strip()
         if allow_missing and any(
