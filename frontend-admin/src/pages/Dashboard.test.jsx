@@ -145,12 +145,16 @@ describe("Dashboard — employee list", () => {
         );
         await performLogin(fetchMock);
 
-        expect(screen.getByText("EMP-001")).toBeInTheDocument();
-        expect(screen.getByText("Alice Nguyen")).toBeInTheDocument();
-        expect(screen.getByText("EMP-002")).toBeInTheDocument();
-        expect(screen.getByText("Bob Tran")).toBeInTheDocument();
-        // null department falls back to "—"
-        expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
+        // React 19: useEffect-triggered fetchEmployees runs asynchronously after
+        // the token state update — wrap assertions in waitFor to let it settle.
+        await waitFor(() => {
+            expect(screen.getByText("EMP-001")).toBeInTheDocument();
+            expect(screen.getByText("Alice Nguyen")).toBeInTheDocument();
+            expect(screen.getByText("EMP-002")).toBeInTheDocument();
+            expect(screen.getByText("Bob Tran")).toBeInTheDocument();
+            // null department falls back to "—"
+            expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
+        });
     });
 
     it("shows stat card with enrolled employee count", async () => {
@@ -167,9 +171,12 @@ describe("Dashboard — employee list", () => {
         );
         await performLogin(fetchMock);
 
+        // React 19: wait for employees to render before querying StatCard
+        await waitFor(() => expect(screen.getByText("Employees").closest("article")).not.toBeNull());
+
         // StatCard for employee count should show "1" — use within() to scope to Employees article
         const employeesArticle = screen.getByText("Employees").closest("article");
-        expect(within(employeesArticle).getByText("1")).toBeInTheDocument();
+        await waitFor(() => expect(within(employeesArticle).getByText("1")).toBeInTheDocument());
     });
 });
 
@@ -295,12 +302,15 @@ describe("Dashboard — enroll face upload", () => {
 
     it("renders file input for each employee row", async () => {
         await loginWithOneEmployee(null);
-        const fileInputs = document.querySelectorAll("input[type=file]");
-        expect(fileInputs.length).toBe(1);
+        // React 19: wait for employee rows to finish rendering
+        await waitFor(() => expect(document.querySelectorAll("input[type=file]").length).toBe(1));
+        expect(document.querySelectorAll("input[type=file]").length).toBe(1);
     });
 
     it("shows error when Enroll clicked without selecting a file", async () => {
         await loginWithOneEmployee(null);
+        // React 19: wait for employee rows to render before clicking Enroll
+        await waitFor(() => screen.getAllByRole("button", { name: /enroll/i }));
         fireEvent.click(screen.getByRole("button", { name: /enroll/i }));
 
         // error shown in 2 places — check at least one exists
@@ -342,6 +352,9 @@ describe("Dashboard — enroll face upload", () => {
 
         await performLogin(fetchMock);
 
+        // React 19: wait for employee rows (and file inputs) to finish rendering
+        await waitFor(() => expect(document.querySelector("input[type=file]")).not.toBeNull());
+
         const fakeFile = new File(["face-data"], "photo.jpg", { type: "image/jpeg" });
         const fileInput = document.querySelector("input[type=file]");
         fireEvent.change(fileInput, { target: { files: [fakeFile] } });
@@ -382,6 +395,9 @@ describe("Dashboard — enroll face upload", () => {
         global.fetch = fetchMock;
         await performLogin(fetchMock);
 
+        // React 19: wait for employee rows to render
+        await waitFor(() => expect(document.querySelector("input[type=file]")).not.toBeNull());
+
         const fakeFile = new File(["face-data"], "photo.jpg", { type: "image/jpeg" });
         const fileInput = document.querySelector("input[type=file]");
         fireEvent.change(fileInput, { target: { files: [fakeFile] } });
@@ -414,6 +430,9 @@ describe("Dashboard — enroll face upload", () => {
         });
         global.fetch = fetchMock;
         await performLogin(fetchMock);
+
+        // React 19: wait for employee rows to render
+        await waitFor(() => expect(document.querySelector("input[type=file]")).not.toBeNull());
 
         const fakeFile = new File(["face-data"], "photo.jpg", { type: "image/jpeg" });
         const fileInput = document.querySelector("input[type=file]");
@@ -455,6 +474,9 @@ describe("Dashboard — enroll face upload", () => {
         });
         global.fetch = fetchMock;
         await performLogin(fetchMock);
+
+        // React 19: wait for employee rows to render
+        await waitFor(() => expect(document.querySelector("input[type=file]")).not.toBeNull());
 
         const fakeFile = new File(["face-data"], "photo.jpg", { type: "image/jpeg" });
         const fileInput = document.querySelector("input[type=file]");
