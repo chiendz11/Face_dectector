@@ -4,11 +4,17 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      day: "monday"
       time: "03:00"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 2
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "github-actions"
@@ -23,7 +29,12 @@ updates:
       time: "03:30"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 2
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "python"
@@ -37,7 +48,12 @@ updates:
       time: "03:40"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 2
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "python"
@@ -51,7 +67,12 @@ updates:
       time: "04:00"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 2
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "frontend"
@@ -65,7 +86,12 @@ updates:
       time: "03:00"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "terraform"
@@ -78,7 +104,12 @@ updates:
       time: "03:10"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "terraform"
@@ -92,7 +123,12 @@ updates:
       time: "03:00"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "docker"
@@ -105,7 +141,12 @@ updates:
       time: "03:10"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "docker"
@@ -118,7 +159,12 @@ updates:
       time: "03:20"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "docker"
@@ -131,7 +177,12 @@ updates:
       time: "03:30"
       timezone: "UTC"
     target-branch: "master"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    groups:
+      non-major:
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "docker"
