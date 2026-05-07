@@ -438,6 +438,29 @@ jobs:
         id: image-meta
         run: echo "owner=$(echo '${{ inputs.registry_org }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
+      - name: Rebuild missing image archives as fallback
+        env:
+          CATALOG: ${{ inputs.catalog_path }}
+          IMAGE_HOST: ghcr.io/${{ steps.image-meta.outputs.owner }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          while IFS= read -r row; do
+            name=$(echo "$row" | jq -r '.name')
+            repo=$(echo "$row" | jq -r '.repository')
+            dockerfile=$(echo "$row" | jq -r '.dockerfile')
+            ctx=$(echo "$row" | jq -r '.context')
+            archive=".artifacts/images/${name}.tar"
+
+            if [ -f "$archive" ]; then
+              continue
+            fi
+
+            ref="$IMAGE_HOST/$repo:$IMAGE_TAG"
+            echo "Missing archive $archive; rebuilding $ref"
+            docker build -t "$ref" -f "$dockerfile" "$ctx"
+            docker save -o "$archive" "$ref"
+          done < <(jq -c '.[]' "$CATALOG")
+
       - name: Load previously built Docker images
         uses: ./.github/actions/load-images
         with:
