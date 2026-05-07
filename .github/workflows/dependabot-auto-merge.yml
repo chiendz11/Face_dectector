@@ -26,10 +26,12 @@ jobs:
         if: |
           steps.meta.outputs.update-type == 'version-update:semver-patch' ||
           steps.meta.outputs.update-type == 'version-update:semver-minor'
-        run: gh pr review "$PR_URL" --approve --body "Auto-approved: ${{ steps.meta.outputs.update-type }} update for \`${{ steps.meta.outputs.dependency-names }}\`."
+        run: gh pr review "$PR_URL" --approve --body "Auto-approved: ${UPDATE_TYPE} update for \`${DEP_NAMES}\`."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          DEP_NAMES: ${{ steps.meta.outputs.dependency-names }}
 
       - name: Enable auto-merge for patch and minor updates
         if: |
