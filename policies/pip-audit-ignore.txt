@@ -1,0 +1,20 @@
+# pip-audit CVE exception list
+#
+# Format (one entry per line):
+#   CVE_OR_PYSEC_ID  # package @ fixed_version  # expires: YYYY-MM-DD  # reason: <text>
+#
+# Rules:
+#   - Entries must include package, fixed_version, expiry date, and reason.
+#   - Expiry date must be <= 90 days from the date the entry was added.
+#   - When the fixed version is pinned in requirements.txt, remove the entry here.
+#   - Blank lines and lines starting with # are ignored.
+#
+# Reviewed by: security team on each merge to master.
+# ─────────────────────────────────────────────────────────────────────────────
+
+CVE-2026-24486  # starlette @ 0.45.3  # expires: 2026-08-01  # reason: fix in 0.45.3, awaiting compatibility validation with fastapi
+CVE-2026-40347  # urllib3 @ 2.5.0    # expires: 2026-08-01  # reason: fix in 2.5.0, dependency of botocore — waiting for botocore release
+PYSEC-2023-184  # pillow @ 10.0.1    # expires: 2026-08-01  # reason: pillow is indirect dep of deepface; pinning tracked in requirements.txt roadmap
+GHSA-jh2j-j4j9-crg3  # cryptography @ 42.0.4  # expires: 2026-08-01  # reason: indirect dep via python-jose; no direct usage of affected API
+CVE-2026-30922  # flask @ 3.1.3      # expires: 2026-08-01  # reason: fix in 3.1.3, locust dependency — not in production container
+CVE-2025-62727  # werkzeug @ 3.1.8   # expires: 2026-08-01  # reason: fix in 3.1.8, locust/flask dev dependency — not in production container
