@@ -54,6 +54,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      security-events: write  # required for SARIF upload to GitHub Security tab
     steps:
       - name: Checkout source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -71,6 +72,11 @@ jobs:
       - name: Run Python SAST scan
         run: bandit -r backend/app -q
 
+      - name: Validate pip-audit exception expiry dates
+        # Hard fail — expired exceptions must be reviewed before CI passes.
+        # This prevents teams from forgetting to clean up stale ignores.
+        run: python scripts/check_pip_audit_exceptions.py policies/pip-audit-ignore.txt
+
       - name: Build pip-audit ignore args from policy file
         id: audit-ignore
         run: |
@@ -78,10 +84,31 @@ jobs:
           echo "args=${IGNORE_ARGS}" >> "$GITHUB_OUTPUT"
 
       - name: Run backend dependency audit
-        run: pip-audit -r backend/requirements.txt --progress=off ${{ steps.audit-ignore.outputs.args }}
+        # continue-on-error: new CVEs do not block PR merges.
+        # Findings are saved as artifacts and reported nightly via
+        # security-scan.yml → GitHub Security tab (SARIF).
+        continue-on-error: true
+        run: |
+          mkdir -p .artifacts/pip-audit
+          pip-audit -r backend/requirements.txt --progress=off \
+            ${{ steps.audit-ignore.outputs.args }} \
+            --format=json --output=.artifacts/pip-audit/backend.json
 
       - name: Run edge-client dependency audit
-        run: pip-audit -r edge-client/requirements.txt --progress=off ${{ steps.audit-ignore.outputs.args }}
+        continue-on-error: true
+        run: |
+          pip-audit -r edge-client/requirements.txt --progress=off \
+            ${{ steps.audit-ignore.outputs.args }} \
+            --format=json --output=.artifacts/pip-audit/edge-client.json
+
+      - name: Upload pip-audit findings
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pip-audit-findings
+          path: .artifacts/pip-audit/
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
