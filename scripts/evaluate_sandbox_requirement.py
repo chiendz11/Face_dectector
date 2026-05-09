@@ -121,6 +121,7 @@ def evaluate_policy(event: dict[str, Any], changed_files: list[str]) -> dict[str
     pull_request = event["pull_request"]
     repository = event["repository"]
     branch = str(pull_request["head"]["ref"])
+    pr_author = str(pull_request.get("user", {}).get("login", ""))
     labels = sorted(str(label["name"]) for label in pull_request.get("labels", []))
     has_deploy_label = any(label in DEPLOY_LABELS for label in labels)
     # Trusted platform-team prefixes: branches maintained by the platform/infra/CI team
@@ -128,11 +129,18 @@ def evaluate_policy(event: dict[str, Any], changed_files: list[str]) -> dict[str
     TRUSTED_PREFIXES = ("devops/", "enterprise/", "ci/", "platform/", "release/", "hotfix/")
     is_trusted_branch = any(branch.startswith(prefix) for prefix in TRUSTED_PREFIXES)
     is_devops_branch = is_trusted_branch  # kept for backward-compat with report output key
+    is_dependabot_pr = pr_author == "dependabot[bot]" or branch.startswith("dependabot/")
     is_draft = bool(pull_request.get("draft", False))
     same_repo = pull_request["head"]["repo"]["full_name"] == repository["full_name"]
     reason_groups = collect_reason_groups(changed_files)
     classification = "heavy" if reason_groups else "fast"
-    requires_sandbox_label = classification == "heavy" and same_repo and not is_draft and not is_trusted_branch
+    requires_sandbox_label = (
+        classification == "heavy"
+        and same_repo
+        and not is_draft
+        and not is_trusted_branch
+        and not is_dependabot_pr
+    )
     should_fail = requires_sandbox_label and not has_deploy_label
 
     if classification == "fast":
@@ -147,6 +155,12 @@ def evaluate_policy(event: dict[str, Any], changed_files: list[str]) -> dict[str
             "This is a heavy-lane PR from a trusted platform-team branch (devops/*, enterprise/*, ci/*, "
             "platform/*, release/*, hotfix/*). Standard deploy labels are not enforced here; use the "
             "protected manual Sandbox DevOps Verify or Sandbox Workflow R&D lanes instead."
+        )
+    elif is_dependabot_pr:
+        decision = "advisory"
+        summary = (
+            "This is a Dependabot PR. Heavy-lane deploy-label enforcement is skipped so dependency update "
+            "automation can proceed through the normal CI and review gates."
         )
     elif is_draft:
         decision = "advisory"
@@ -179,6 +193,7 @@ def evaluate_policy(event: dict[str, Any], changed_files: list[str]) -> dict[str
         "decision": decision,
         "hasDeployLabel": has_deploy_label,
         "isDevopsBranch": is_devops_branch,
+        "isDependabotPr": is_dependabot_pr,
         "isDraft": is_draft,
         "reasonGroups": reason_groups,
         "requiresSandboxLabel": requires_sandbox_label,
