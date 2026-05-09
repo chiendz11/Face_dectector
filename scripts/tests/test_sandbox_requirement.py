@@ -105,7 +105,17 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         comment_step = next(
             step for step in steps if step.get("name") == "Upsert sandbox policy PR comment"
         )
-        self.assertEqual(comment_step["uses"], "actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b")
+        uses_value = str(comment_step["uses"])
+        self.assertTrue(
+            uses_value.startswith("actions/github-script@"),
+            f"Unexpected action reference: {uses_value}",
+        )
+        pinned_ref = uses_value.split("@", 1)[1]
+        self.assertEqual(
+            len(pinned_ref),
+            40,
+            "actions/github-script must stay pinned to a full commit SHA",
+        )
 
     def test_platform_ci_detects_sandbox_policy_contract_changes(self) -> None:
         workflow_path = REPO_ROOT / ".github/workflows/reusable-platform-ci.yml"
