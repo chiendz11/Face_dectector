@@ -1,6 +1,3 @@
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-
 param(
 	[ValidateSet("up", "down", "restart", "logs", "ps", "qa")]
 	[string]$Action = "qa",
@@ -9,6 +6,9 @@ param(
 	[switch]$Follow,
 	[switch]$IncludeEdge
 )
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $root
