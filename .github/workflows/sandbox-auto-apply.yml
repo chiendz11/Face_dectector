@@ -144,10 +144,9 @@ jobs:
             const labels = pr.labels.map((label) => label.name);
             const hasDeployLabel = allowedLabels.some((label) => labels.includes(label));
             const sameRepo = pr.head.repo.full_name === `${context.repo.owner}/${context.repo.repo}`;
-            const isDevopsBranch = pr.head.ref.startsWith('devops/');
             const { pending, failing } = await evaluateWorkflowGates(pr.head.sha);
             const checksReady = pending.length === 0 && failing.length === 0;
-            const shouldApply = sameRepo && !isDevopsBranch && !pr.draft && hasDeployLabel && checksReady;
+            const shouldApply = sameRepo && !pr.draft && hasDeployLabel && checksReady;
 
             core.setOutput('should_apply', shouldApply ? 'true' : 'false');
             core.setOutput('owner_login', pr.user.login);
@@ -157,8 +156,6 @@ jobs:
 
             if (!sameRepo) {
               core.info('Skipping sandbox auto-apply for forked pull requests.');
-            } else if (isDevopsBranch) {
-              core.info('Skipping developer sandbox flow for devops/* branches.');
             } else if (pr.draft) {
               core.info('Skipping sandbox auto-apply because the PR is still a draft.');
             } else if (!hasDeployLabel) {

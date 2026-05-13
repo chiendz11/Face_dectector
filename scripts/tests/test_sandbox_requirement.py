@@ -73,14 +73,34 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         self.assertEqual(report["decision"], "pass")
         self.assertFalse(report["shouldFail"])
 
-    def test_devops_branch_is_advisory(self) -> None:
+    def test_workflow_change_without_label_fails(self) -> None:
         report = evaluate_policy(
             make_event(branch="devops/enterprise-ci-hardening"),
             [".github/workflows/reusable-app-ci.yml"],
         )
 
         self.assertEqual(report["classification"], "heavy")
-        self.assertEqual(report["decision"], "advisory")
+        self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["shouldFail"])
+
+    def test_release_contract_change_without_label_fails(self) -> None:
+        report = evaluate_policy(
+            make_event(),
+            ["frontend-admin/Dockerfile"],
+        )
+
+        self.assertEqual(report["classification"], "heavy")
+        self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["shouldFail"])
+
+    def test_qa_scripts_and_docs_stay_fast_lane(self) -> None:
+        report = evaluate_policy(
+            make_event(),
+            ["scripts/qa-local-compose.ps1", "scripts/qa-local-commands.md"],
+        )
+
+        self.assertEqual(report["classification"], "fast")
+        self.assertEqual(report["decision"], "pass")
         self.assertFalse(report["shouldFail"])
 
     def test_draft_heavy_pr_is_advisory(self) -> None:
@@ -123,6 +143,13 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
 
         self.assertIn("sandbox-policy", workflow_text)
         self.assertIn("evaluate_sandbox_requirement", workflow_text)
+
+    def test_sandbox_auto_apply_does_not_special_case_branch_prefixes(self) -> None:
+        workflow_path = REPO_ROOT / ".github/workflows/sandbox-auto-apply.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+
+        self.assertNotIn("isDevopsBranch", workflow_text)
+        self.assertNotIn("Skipping developer sandbox flow for devops/* branches.", workflow_text)
 
 
 if __name__ == "__main__":
