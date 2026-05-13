@@ -5,7 +5,7 @@ import fnmatch
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Iterable
 
 
 DEPLOY_LABELS = {"deploy-sandbox", "deploy-preview"}
@@ -63,8 +63,71 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         required=True,
         help="Path to a newline-delimited file containing changed repository paths.",
     )
+    parser.add_argument("--approvals-path", help="Optional path to a file containing approval count.")
+    parser.add_argument("--approvers-path", help="Optional path to a file (JSON array or newline) with approver usernames.")
+    parser.add_argument("--codeowners-path", help="Optional path to the CODEOWNERS file to validate owners.")
     parser.add_argument("--report-path", help="Optional path to write the JSON evaluation report.")
     return parser.parse_args(argv)
+
+
+def parse_approvers(path: Path) -> set[str]:
+    try:
+        txt = path.read_text(encoding="utf-8").strip()
+    except Exception:
+        return set()
+
+    if not txt:
+        return set()
+
+    # try JSON array first
+    try:
+        data = json.loads(txt)
+        if isinstance(data, list):
+            names = [str(x) for x in data]
+        else:
+            names = [str(data)]
+    except Exception:
+        names = [line.strip() for line in txt.splitlines() if line.strip()]
+
+    return {n.lstrip("@") for n in names}
+
+
+def parse_codeowners(path: Path) -> Dict[str, list[str]]:
+    mapping: Dict[str, list[str]] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return mapping
+
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        pattern = parts[0]
+        owners: list[str] = []
+        for owner in parts[1:]:
+            if not owner.startswith("@"):
+                continue
+            owner_name = owner.lstrip("@")
+            # ignore team entries like org/team
+            if "/" in owner_name:
+                continue
+            owners.append(owner_name)
+        if owners:
+            mapping[pattern] = owners
+    return mapping
+
+
+def owners_for_changed_files(changed_files: Iterable[str], codeowners: Dict[str, list[str]]) -> set[str]:
+    owners: set[str] = set()
+    for path in changed_files:
+        for pattern, owner_list in codeowners.items():
+            if path_matches(path, [pattern]):
+                owners.update(owner_list)
+    return owners
 
 
 def normalize_path(path: str) -> str:
@@ -117,7 +180,13 @@ def collect_reason_groups(changed_files: list[str]) -> list[dict[str, Any]]:
     return groups
 
 
-def evaluate_policy(event: dict[str, Any], changed_files: list[str]) -> dict[str, Any]:
+def evaluate_policy(
+    event: dict[str, Any],
+    changed_files: list[str],
+    approval_count: int = 0,
+    approvers: set[str] | None = None,
+    codeowners: Dict[str, list[str]] | None = None,
+) -> dict[str, Any]:
     pull_request = event["pull_request"]
     repository = event["repository"]
     branch = str(pull_request["head"]["ref"])
@@ -135,7 +204,17 @@ def evaluate_policy(event: dict[str, Any], changed_files: list[str]) -> dict[str
         and not is_draft
         and not is_dependabot_pr
     )
-    should_fail = requires_sandbox_label and not has_deploy_label
+    # CODEOWNERS/ruleset exception: if approver is an owner of changed heavy files
+    approval_exception = False
+    matched_owners: set[str] = set()
+    if codeowners and approvers:
+        matched_owners = owners_for_changed_files(changed_files, codeowners)
+        if matched_owners and any(a in matched_owners for a in approvers):
+            approval_exception = True
+    else:
+        # fallback: numeric approval count
+        approval_exception = approval_count >= 1
+    should_fail = requires_sandbox_label and not has_deploy_label and not approval_exception
 
     if classification == "fast":
         decision = "pass"
@@ -166,11 +245,17 @@ def evaluate_policy(event: dict[str, Any], changed_files: list[str]) -> dict[str
             "This PR is in the heavy lane and already carries a sandbox deploy label, so the reviewer-managed sandbox "
             "requirement is satisfied."
         )
+    elif approval_exception:
+        decision = "pass"
+        summary = (
+            "This PR is in the heavy lane but has sufficient approvals (CODEOWNERS/ruleset), so the reviewer-managed sandbox "
+            "requirement is satisfied."
+        )
     else:
         decision = "fail"
         summary = (
-            "This PR is in the heavy lane and is missing `deploy-sandbox` or `deploy-preview`. Add one of those labels "
-            "before asking the standard sandbox auto-apply flow to create a PR environment."
+            "This PR is in the heavy lane and is missing `deploy-sandbox` or `deploy-preview` and does not have sufficient approvals. "
+            "Add one of those labels or get approval before asking the standard sandbox auto-apply flow to create a PR environment."
         )
 
     return {
@@ -187,6 +272,8 @@ def evaluate_policy(event: dict[str, Any], changed_files: list[str]) -> dict[str
         "sameRepo": same_repo,
         "shouldFail": should_fail,
         "summary": summary,
+        "approvers": sorted(list(approvers)) if approvers else [],
+        "matchedOwners": sorted(list(matched_owners)) if matched_owners else [],
     }
 
 
@@ -212,9 +299,30 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    approval_count = 0
+    if args.approvals_path:
+        try:
+            approval_count = int(Path(args.approvals_path).read_text(encoding="utf-8").strip())
+        except Exception:
+            approval_count = 0
+    approvers: set[str] | None = None
+    if getattr(args, "approvers_path", None):
+        try:
+            approvers = parse_approvers(Path(args.approvers_path))
+        except Exception:
+            approvers = set()
+    codeowners: Dict[str, list[str]] | None = None
+    if getattr(args, "codeowners_path", None):
+        try:
+            codeowners = parse_codeowners(Path(args.codeowners_path))
+        except Exception:
+            codeowners = None
     report = evaluate_policy(
         load_event(Path(args.event_path)),
         load_changed_files(Path(args.changed_files_path)),
+        approval_count=approval_count,
+        approvers=approvers,
+        codeowners=codeowners,
     )
     print_report(report)
 
@@ -223,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if report["shouldFail"]:
         print(
-            "Heavy-lane PRs need `deploy-sandbox` or `deploy-preview` before they can rely on the standard sandbox path.",
+            "Heavy-lane PRs need `deploy-sandbox` or `deploy-preview` or CODEOWNERS/ruleset approval before they can rely on the standard sandbox path.",
             file=sys.stderr,
         )
         return 1

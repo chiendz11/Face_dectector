@@ -1,11 +1,22 @@
 from __future__ import annotations
-
 import unittest
 from pathlib import Path
-
 import yaml
-
 from scripts.evaluate_sandbox_requirement import evaluate_policy
+
+
+class SandboxRequirementPolicyTest(unittest.TestCase):
+
+    def test_heavy_lane_with_codeowners_approval_passes(self) -> None:
+        report = evaluate_policy(
+            make_event(),
+            [".github/workflows/reusable-app-ci.yml"],
+            approval_count=1,
+        )
+        self.assertEqual(report["classification"], "heavy")
+        self.assertEqual(report["decision"], "pass")
+        self.assertFalse(report["shouldFail"])
+
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
