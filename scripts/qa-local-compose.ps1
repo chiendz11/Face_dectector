@@ -49,7 +49,7 @@ function Wait-HttpOk {
 
 	for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
 		try {
-			$response = Invoke-WebRequest -Uri $Url -Method Get -TimeoutSec 5
+			$response = Invoke-WebRequest -Uri $Url -Method Get -TimeoutSec 5 -UseBasicParsing
 			if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
 				Write-Host "[ok] $Url -> HTTP $($response.StatusCode)"
 				return
@@ -68,7 +68,8 @@ function Wait-HttpOk {
 
 function Run-QaSmoke {
 	Write-Host "Running QA local smoke checks..."
-	Wait-HttpOk -Url "http://localhost/api/health"
+	Wait-HttpOk -Url "http://localhost/health"
+	Wait-HttpOk -Url "http://localhost/api/admin/health"
 	Wait-HttpOk -Url "http://localhost/admin/"
 }
 
@@ -110,6 +111,14 @@ switch ($Action) {
 	}
 
 	"qa" {
+		if ($Build) {
+			if ($NoCache) {
+				Invoke-Compose -Args @("build", "--no-cache")
+			}
+			else {
+				Invoke-Compose -Args @("build")
+			}
+		}
 		Invoke-Compose -Args @("up", "-d")
 		Run-QaSmoke
 		Invoke-Compose -Args @("ps")
