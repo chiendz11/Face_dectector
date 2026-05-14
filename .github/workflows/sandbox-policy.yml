@@ -75,15 +75,35 @@ jobs:
             fs.writeFileSync('.sandbox-policy-approvals', String(approversArray.length));
             core.setOutput('approval_count', approversArray.length);
 
+      - name: Check allow-self-approve label
+        id: check_allow_self_approve
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request || {};
+            const labels = (pr.labels || []).map(l => l.name);
+            const hasLabel = labels.includes('allow-self-approve');
+            const actor = context.payload.sender && context.payload.sender.login;
+            const repoOwner = context.repo.owner;
+            const allow = hasLabel && actor === repoOwner ? 'true' : 'false';
+            core.setOutput('allow', allow);
+
       - name: Evaluate sandbox blast radius policy
+        env:
+          ALLOW_SELF_APPROVE: ${{ steps.check_allow_self_approve.outputs.allow }}
         run: |
           mkdir -p .artifacts/sandbox-policy
+          EXTRA=""
+          if [ "${ALLOW_SELF_APPROVE}" = "true" ]; then
+            EXTRA="--allow-self-approve"
+          fi
           python scripts/evaluate_sandbox_requirement.py \
             --event-path "$GITHUB_EVENT_PATH" \
             --changed-files-path .sandbox-policy-files \
             --approvers-path .sandbox-policy-approvers \
             --codeowners-path .github/CODEOWNERS \
             --approvals-path .sandbox-policy-approvals \
+            $EXTRA \
             --report-path .artifacts/sandbox-policy/report.json
 
       - name: Fail if governance block

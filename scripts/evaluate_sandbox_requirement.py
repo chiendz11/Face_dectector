@@ -78,6 +78,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--approvals-path", help="Optional path to a file containing approval count.")
     parser.add_argument("--approvers-path", help="Optional path to a file (JSON array or newline) with approver usernames.")
     parser.add_argument("--codeowners-path", help="Optional path to the CODEOWNERS file to validate owners.")
+    parser.add_argument(
+        "--allow-self-approve",
+        action="store_true",
+        help="Allow self-approval when PR author is sole CODEOWNER for changed files (solo-maintainer).",
+    )
     parser.add_argument("--report-path", help="Optional path to write the JSON evaluation report.")
     return parser.parse_args(argv)
 
@@ -198,6 +203,7 @@ def evaluate_policy(
     approval_count: int = 0,
     approvers: set[str] | None = None,
     codeowners: Dict[str, list[str]] | None = None,
+    allow_self_approve: bool = False,
 ) -> dict[str, Any]:
     pull_request = event["pull_request"]
     repository = event["repository"]
@@ -219,12 +225,24 @@ def evaluate_policy(
     # CODEOWNERS/ruleset exception: if approver is an owner of changed heavy files
     approval_exception = False
     matched_owners: set[str] = set()
-    if codeowners and approvers:
+    self_approve_used = False
+    self_approve_actor = None
+    if codeowners:
         matched_owners = owners_for_changed_files(changed_files, codeowners)
-        if matched_owners and any(a in matched_owners for a in approvers):
-            approval_exception = True
+        if matched_owners:
+            if approvers and any(a in matched_owners for a in approvers):
+                approval_exception = True
+            elif allow_self_approve and matched_owners == {pr_author}:
+                # explicit opt-in for solo-maintainer self-approve
+                approval_exception = True
+                self_approve_used = True
+                # actor that triggered event (if present)
+                self_approve_actor = event.get("sender", {}).get("login")
+        else:
+            # no owners matched; fallback to numeric approvals
+            approval_exception = approval_count >= 1
     else:
-        # fallback: numeric approval count
+        # no codeowners file loaded; fallback to numeric approvals
         approval_exception = approval_count >= 1
     should_fail = requires_sandbox_label and not has_deploy_label and not approval_exception
     # detect critical path touches
@@ -303,6 +321,9 @@ def evaluate_policy(
         "summary": summary,
         "approvers": sorted(list(approvers)) if approvers else [],
         "matchedOwners": sorted(list(matched_owners)) if matched_owners else [],
+        "selfApproveEligible": bool(allow_self_approve),
+        "selfApproveUsed": bool(self_approve_used),
+        "selfApproveActor": self_approve_actor,
     }
 
 
