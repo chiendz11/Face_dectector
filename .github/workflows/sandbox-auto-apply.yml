@@ -129,8 +129,21 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            if (!fs.existsSync(process.env.REPORT_FILE)) { core.setOutput('should_apply', 'false'); core.setOutput('owner_login', ''); core.setOutput('pr_number', ''); core.setOutput('source_ref_name', ''); core.setOutput('source_git_sha', ''); return; }
+            if (!fs.existsSync(process.env.REPORT_FILE)) {
+              core.info('no report file; skipping apply');
+              core.setOutput('should_apply', 'false');
+              core.setOutput('owner_login', '');
+              core.setOutput('pr_number', '');
+              core.setOutput('source_ref_name', '');
+              core.setOutput('source_git_sha', '');
+              return;
+            }
             const report = JSON.parse(fs.readFileSync(process.env.REPORT_FILE, 'utf8'));
+            // runtime error in evaluator -> do not apply
+            if (report.decision === 'error') { core.info('evaluator runtime error; skip apply'); core.setOutput('should_apply', 'false'); return; }
+            // governance block: absolute no-deploy
+            if (report.block) { core.info(`governance block present: ${JSON.stringify(report.blockingReasons || [])}`); core.setOutput('should_apply', 'false'); return; }
+            // maintain existing semantic: require explicit pass
             if (report.decision !== 'pass') { core.info('report not pass'); core.setOutput('should_apply', 'false'); return; }
 
             const workflowPolicies = [

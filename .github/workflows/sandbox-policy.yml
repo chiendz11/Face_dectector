@@ -76,7 +76,6 @@ jobs:
             core.setOutput('approval_count', approversArray.length);
 
       - name: Evaluate sandbox blast radius policy
-        continue-on-error: true
         run: |
           mkdir -p .artifacts/sandbox-policy
           python scripts/evaluate_sandbox_requirement.py \
@@ -86,6 +85,29 @@ jobs:
             --codeowners-path .github/CODEOWNERS \
             --approvals-path .sandbox-policy-approvals \
             --report-path .artifacts/sandbox-policy/report.json
+
+      - name: Fail if governance block
+        if: ${{ always() && hashFiles('.artifacts/sandbox-policy/report.json') != '' }}
+        run: |
+          python - <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          report_file = Path('.artifacts/sandbox-policy/report.json')
+          if not report_file.exists():
+              print('No report found; skipping governance block check')
+              sys.exit(0)
+          report = json.loads(report_file.read_text(encoding='utf-8'))
+          # runtime error in evaluator should surface as error
+          if report.get('decision') == 'error':
+              print('Evaluator runtime error: see report', file=sys.stderr)
+              sys.exit(2)
+          if report.get('block'):
+              reasons = report.get('blockingReasons', [])
+              print('Sandbox policy governance block: ' + ','.join(reasons), file=sys.stderr)
+              sys.exit(1)
+          print('No governance block')
+          PY
 
       - name: Write sandbox policy summary
         if: ${{ always() && hashFiles('.artifacts/sandbox-policy/report.json') != '' }}
@@ -117,8 +139,15 @@ jobs:
           PY
           cat .artifacts/sandbox-policy/summary.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Upload sandbox-policy report
+        if: ${{ always() && hashFiles('.artifacts/sandbox-policy/report.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-policy-report
+          path: .artifacts/sandbox-policy/
+
       - name: Mark ready-for-deploy (bot)
-        if: ${{ always() && hashFiles('.artifacts/sandbox-policy/report.json') != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ hashFiles('.artifacts/sandbox-policy/report.json') != '' && github.event.pull_request.head.repo.full_name == github.repository }}
         uses: actions/github-script@v7
         env:
           REPORT_FILE: .artifacts/sandbox-policy/report.json

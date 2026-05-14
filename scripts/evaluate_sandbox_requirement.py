@@ -4,6 +4,8 @@ import argparse
 import fnmatch
 import json
 import sys
+import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
@@ -51,6 +53,16 @@ SERVICE_SURFACE_PATTERNS = {
     "edge-client": ["edge-client/**"],
     "nginx": ["nginx/**"],
 }
+
+# Patterns that are considered critically sensitive and should block merges
+CRITICAL_PATH_PATTERNS = [
+    "terraform/**",
+    "backend/alembic.ini",
+    "backend/alembic/**",
+    "iam/**",
+    "network/**",
+    "auth/**",
+]
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -215,6 +227,19 @@ def evaluate_policy(
         # fallback: numeric approval count
         approval_exception = approval_count >= 1
     should_fail = requires_sandbox_label and not has_deploy_label and not approval_exception
+    # detect critical path touches
+    touches_critical_paths = any(path_matches(path, CRITICAL_PATH_PATTERNS) for path in changed_files)
+
+    # blocking reasons (governance core)
+    blocking_reasons: list[str] = []
+    if classification == "heavy" and same_repo and not is_draft and not is_dependabot_pr:
+        # missing approvals (CODEOWNERS/ruleset) is a governance block
+        if not approval_exception:
+            blocking_reasons.append("missing_approvals")
+        if touches_critical_paths:
+            blocking_reasons.append("touches_critical_paths")
+
+    block = len(blocking_reasons) > 0
 
     if classification == "fast":
         decision = "pass"
@@ -257,8 +282,9 @@ def evaluate_policy(
             "This PR is in the heavy lane and is missing `deploy-sandbox` or `deploy-preview` and does not have sufficient approvals. "
             "Add one of those labels or get approval before asking the standard sandbox auto-apply flow to create a PR environment."
         )
-
     return {
+        "version": "1",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
         "branch": branch,
         "changedFiles": changed_files,
         "classification": classification,
@@ -271,6 +297,9 @@ def evaluate_policy(
         "requiresSandboxLabel": requires_sandbox_label,
         "sameRepo": same_repo,
         "shouldFail": should_fail,
+        "block": block,
+        "blockingReasons": blocking_reasons,
+        "touchesCriticalPaths": touches_critical_paths,
         "summary": summary,
         "approvers": sorted(list(approvers)) if approvers else [],
         "matchedOwners": sorted(list(matched_owners)) if matched_owners else [],
@@ -299,43 +328,59 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    approval_count = 0
-    if args.approvals_path:
-        try:
-            approval_count = int(Path(args.approvals_path).read_text(encoding="utf-8").strip())
-        except Exception:
-            approval_count = 0
-    approvers: set[str] | None = None
-    if getattr(args, "approvers_path", None):
-        try:
-            approvers = parse_approvers(Path(args.approvers_path))
-        except Exception:
-            approvers = set()
-    codeowners: Dict[str, list[str]] | None = None
-    if getattr(args, "codeowners_path", None):
-        try:
-            codeowners = parse_codeowners(Path(args.codeowners_path))
-        except Exception:
-            codeowners = None
-    report = evaluate_policy(
-        load_event(Path(args.event_path)),
-        load_changed_files(Path(args.changed_files_path)),
-        approval_count=approval_count,
-        approvers=approvers,
-        codeowners=codeowners,
-    )
-    print_report(report)
+    try:
+        approval_count = 0
+        if args.approvals_path:
+            try:
+                approval_count = int(Path(args.approvals_path).read_text(encoding="utf-8").strip())
+            except Exception:
+                approval_count = 0
+        approvers: set[str] | None = None
+        if getattr(args, "approvers_path", None):
+            try:
+                approvers = parse_approvers(Path(args.approvers_path))
+            except Exception:
+                approvers = set()
+        codeowners: Dict[str, list[str]] | None = None
+        if getattr(args, "codeowners_path", None):
+            try:
+                codeowners = parse_codeowners(Path(args.codeowners_path))
+            except Exception:
+                codeowners = None
 
-    if args.report_path:
-        write_report(Path(args.report_path), report)
-
-    if report["shouldFail"]:
-        print(
-            "Heavy-lane PRs need `deploy-sandbox` or `deploy-preview` or CODEOWNERS/ruleset approval before they can rely on the standard sandbox path.",
-            file=sys.stderr,
+        report = evaluate_policy(
+            load_event(Path(args.event_path)),
+            load_changed_files(Path(args.changed_files_path)),
+            approval_count=approval_count,
+            approvers=approvers,
+            codeowners=codeowners,
         )
-        return 1
-    return 0
+        print_report(report)
+
+        if args.report_path:
+            write_report(Path(args.report_path), report)
+
+        # Normal completion: return 0. Blocking/allow decisions are encoded in report['block']
+        return 0
+    except Exception as exc:
+        tb = traceback.format_exc()
+        err_report = {
+            "version": "1",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "decision": "error",
+            "classification": "unknown",
+            "summary": "Evaluator encountered an unexpected error.",
+            "error": str(exc),
+            "traceback": tb,
+        }
+        print("Evaluator runtime error:", file=sys.stderr)
+        print(str(exc), file=sys.stderr)
+        if getattr(args, "report_path", None):
+            try:
+                write_report(Path(args.report_path), err_report)
+            except Exception:
+                pass
+        return 2
 
 
 if __name__ == "__main__":
