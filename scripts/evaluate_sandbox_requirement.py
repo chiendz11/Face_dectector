@@ -332,6 +332,10 @@ def print_report(report: dict[str, Any]) -> None:
     print(f"Lane classification: {report['classification']}")
     print(f"Branch: {report['branch']}")
     print(f"Deploy label present: {report['hasDeployLabel']}")
+    if report.get("selfApproveEligible"):
+        print("Self-approve mode enabled: true")
+        print(f"Self-approve actor: {report.get('selfApproveActor') or 'unknown'}")
+        print(f"Matched owners: {', '.join(report.get('matchedOwners', [])) or 'none'}")
     print(report["summary"])
 
     if report["reasonGroups"]:
@@ -375,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
             approval_count=approval_count,
             approvers=approvers,
             codeowners=codeowners,
+            allow_self_approve=getattr(args, "allow_self_approve", False),
         )
         print_report(report)
 

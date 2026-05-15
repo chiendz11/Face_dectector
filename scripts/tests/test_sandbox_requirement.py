@@ -1,8 +1,9 @@
 from __future__ import annotations
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 import yaml
-from scripts.evaluate_sandbox_requirement import evaluate_policy
+from scripts.evaluate_sandbox_requirement import evaluate_policy, main
 
 
 class SandboxRequirementPolicyTest(unittest.TestCase):
@@ -35,12 +36,15 @@ def make_event(
     labels: list[str] | None = None,
     same_repo: bool = True,
     draft: bool = False,
+    author: str = "chiendz11",
 ) -> dict[str, object]:
     repo_name = "chiendz11/Face_dectector"
     return {
         "repository": {"full_name": repo_name},
+        "sender": {"login": author},
         "pull_request": {
             "draft": draft,
+            "user": {"login": author},
             "head": {
                 "ref": branch,
                 "repo": {
@@ -83,6 +87,42 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
 
         self.assertEqual(report["decision"], "pass")
         self.assertFalse(report["shouldFail"])
+
+    def test_main_passes_allow_self_approve_flag_to_evaluator(self) -> None:
+        with (
+            patch(
+                "scripts.evaluate_sandbox_requirement.load_event",
+                return_value=make_event(labels=["allow-self-approve"]),
+            ),
+            patch(
+                "scripts.evaluate_sandbox_requirement.load_changed_files",
+                return_value=[".github/workflows/sandbox-policy.yml"],
+            ),
+            patch("scripts.evaluate_sandbox_requirement.parse_approvers", return_value=set()),
+            patch("scripts.evaluate_sandbox_requirement.parse_codeowners", return_value={"*": ["chiendz11"]}),
+            patch("scripts.evaluate_sandbox_requirement.print_report") as print_report,
+        ):
+            exit_code = main(
+                [
+                    "--event-path",
+                    "event.json",
+                    "--changed-files-path",
+                    "changed-files",
+                    "--approvers-path",
+                    "approvers.json",
+                    "--codeowners-path",
+                    "CODEOWNERS",
+                    "--allow-self-approve",
+                ]
+            )
+            report = print_report.call_args.args[0]
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["decision"], "pass")
+        self.assertTrue(report["selfApproveEligible"])
+        self.assertTrue(report["selfApproveUsed"])
+        self.assertEqual(report["selfApproveActor"], "chiendz11")
+        self.assertEqual(report["matchedOwners"], ["chiendz11"])
 
     def test_workflow_change_without_label_fails(self) -> None:
         report = evaluate_policy(
