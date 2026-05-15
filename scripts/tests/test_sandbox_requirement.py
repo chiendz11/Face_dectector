@@ -56,6 +56,30 @@ def make_event(
     }
 
 
+def trusted_labels(*labels: str, actor: str = "chiendz11") -> dict[str, dict[str, object]]:
+    return {
+        label: {
+            "present": True,
+            "actor": actor,
+            "trusted": True,
+            "labeledAt": "2026-05-15T00:00:00Z",
+        }
+        for label in labels
+    }
+
+
+def untrusted_labels(*labels: str, actor: str = "github-actions[bot]") -> dict[str, dict[str, object]]:
+    return {
+        label: {
+            "present": True,
+            "actor": actor,
+            "trusted": False,
+            "labeledAt": "2026-05-15T00:00:00Z",
+        }
+        for label in labels
+    }
+
+
 class SandboxRequirementPolicyTest(unittest.TestCase):
     def test_heavy_infra_pr_without_label_fails(self) -> None:
         report = evaluate_policy(
@@ -83,10 +107,66 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         report = evaluate_policy(
             make_event(labels=["deploy-sandbox"]),
             ["deploy/helm/face-detector/templates/nginx.yaml"],
+            label_trust=trusted_labels("deploy-sandbox"),
         )
 
         self.assertEqual(report["decision"], "pass")
         self.assertFalse(report["shouldFail"])
+        self.assertFalse(report["block"])
+        self.assertEqual(report["governanceMode"], "sandbox_deploy")
+        self.assertEqual(report["deployLabelActor"], "chiendz11")
+
+    def test_deploy_preview_label_is_supported_alias(self) -> None:
+        report = evaluate_policy(
+            make_event(labels=["deploy-preview"]),
+            ["deploy/helm/face-detector/templates/nginx.yaml"],
+            label_trust=trusted_labels("deploy-preview"),
+        )
+
+        self.assertEqual(report["decision"], "pass")
+        self.assertFalse(report["shouldFail"])
+        self.assertFalse(report["block"])
+
+    def test_untrusted_deploy_label_does_not_clear_governance_block(self) -> None:
+        report = evaluate_policy(
+            make_event(labels=["deploy-sandbox"]),
+            ["deploy/helm/face-detector/templates/nginx.yaml"],
+            label_trust=untrusted_labels("deploy-sandbox"),
+        )
+
+        self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["shouldFail"])
+        self.assertTrue(report["block"])
+        self.assertFalse(report["deployLabelTrusted"])
+        self.assertIn("missing_sandbox_label_or_approval", report["blockingReasons"])
+
+    def test_critical_path_self_approve_still_requires_sandbox_label(self) -> None:
+        report = evaluate_policy(
+            make_event(labels=["allow-self-approve"]),
+            ["terraform/eks/main.tf"],
+            codeowners={"*": ["chiendz11"]},
+            allow_self_approve=True,
+            label_trust=trusted_labels("allow-self-approve"),
+        )
+
+        self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["shouldFail"])
+        self.assertTrue(report["block"])
+        self.assertIn("critical_path_requires_sandbox", report["blockingReasons"])
+
+    def test_untrusted_self_approve_label_does_not_clear_governance_block(self) -> None:
+        report = evaluate_policy(
+            make_event(labels=["allow-self-approve"]),
+            [".github/workflows/sandbox-policy.yml"],
+            codeowners={"*": ["chiendz11"]},
+            allow_self_approve=True,
+            label_trust=untrusted_labels("allow-self-approve", actor="octocat"),
+        )
+
+        self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["block"])
+        self.assertFalse(report["selfApproveUsed"])
+        self.assertFalse(report["selfApproveLabelTrusted"])
 
     def test_main_passes_allow_self_approve_flag_to_evaluator(self) -> None:
         with (
@@ -100,6 +180,7 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
             ),
             patch("scripts.evaluate_sandbox_requirement.parse_approvers", return_value=set()),
             patch("scripts.evaluate_sandbox_requirement.parse_codeowners", return_value={"*": ["chiendz11"]}),
+            patch("scripts.evaluate_sandbox_requirement.parse_label_trust", return_value=trusted_labels("allow-self-approve")),
             patch("scripts.evaluate_sandbox_requirement.print_report") as print_report,
         ):
             exit_code = main(
@@ -112,6 +193,8 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
                     "approvers.json",
                     "--codeowners-path",
                     "CODEOWNERS",
+                    "--label-trust-path",
+                    "label-trust.json",
                     "--allow-self-approve",
                 ]
             )
@@ -122,6 +205,8 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         self.assertTrue(report["selfApproveEligible"])
         self.assertTrue(report["selfApproveUsed"])
         self.assertEqual(report["selfApproveActor"], "chiendz11")
+        self.assertTrue(report["selfApproveLabelTrusted"])
+        self.assertEqual(report["selfApproveLabelActor"], "chiendz11")
         self.assertEqual(report["matchedOwners"], ["chiendz11"])
 
     def test_workflow_change_without_label_fails(self) -> None:
@@ -172,6 +257,13 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         )
         self.assertIn("scripts/evaluate_sandbox_requirement.py", evaluate_step["run"])
         self.assertIn("--changed-files-path .sandbox-policy-files", evaluate_step["run"])
+        self.assertIn("--label-trust-path .sandbox-policy-label-trust.json", evaluate_step["run"])
+
+        label_step = next(
+            step for step in steps if step.get("name") == "Resolve trusted governance labels"
+        )
+        self.assertIn("issues.listEvents", label_step["with"]["script"])
+        self.assertIn("actor === repoOwner", label_step["with"]["script"])
 
         comment_step = next(
             step for step in steps if step.get("name") == "Upsert sandbox policy PR comment"
@@ -201,6 +293,14 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
 
         self.assertNotIn("isDevopsBranch", workflow_text)
         self.assertNotIn("Skipping developer sandbox flow for devops/* branches.", workflow_text)
+
+    def test_sandbox_auto_apply_accepts_deploy_preview_alias(self) -> None:
+        workflow_path = REPO_ROOT / ".github/workflows/sandbox-auto-apply.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+
+        self.assertIn("const deployLabels = ['deploy-sandbox', 'deploy-preview'];", workflow_text)
+        self.assertIn("e.label.name === deployLabel", workflow_text)
+        self.assertIn("actor !== context.repo.owner", workflow_text)
 
 
 if __name__ == "__main__":

@@ -199,16 +199,19 @@ jobs:
             if (!pr) { core.setOutput('should_apply', 'false'); return; }
 
             const labels = pr.labels.map(l => l.name);
-            if (!labels.includes('deploy-sandbox')) { core.info('no deploy-sandbox label'); core.setOutput('should_apply', 'false'); return; }
+            const deployLabels = ['deploy-sandbox', 'deploy-preview'];
+            const deployLabel = deployLabels.find(label => labels.includes(label));
+            if (!deployLabel) { core.info('no sandbox deploy label'); core.setOutput('should_apply', 'false'); return; }
 
             // verify label actor was a human
             const events = await github.paginate(github.rest.issues.listEvents, { owner: context.repo.owner, repo: context.repo.repo, issue_number: pr.number, per_page: 100 });
-            const labelEvents = events.filter(e => e.event === 'labeled' && e.label && e.label.name === 'deploy-sandbox');
+            const labelEvents = events.filter(e => e.event === 'labeled' && e.label && e.label.name === deployLabel);
             if (labelEvents.length === 0) { core.info('no label events'); core.setOutput('should_apply', 'false'); return; }
             const last = labelEvents.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).pop();
             const actor = (last.actor && last.actor.login) || '';
             const botUsers = new Set(['github-actions[bot]', 'dependabot[bot]']);
             if (botUsers.has(actor)) { core.info('label added by bot; skip auto-apply'); core.setOutput('should_apply', 'false'); return; }
+            if (actor !== context.repo.owner) { core.info('label not added by repository owner; skip auto-apply'); core.setOutput('should_apply', 'false'); return; }
 
             const { pending, failing } = await evaluateWorkflowGates(pr.head.sha);
             if (pending.length > 0 || failing.length > 0) { core.info('CI gates not ready'); core.setOutput('should_apply', 'false'); return; }

@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable
 
 
-DEPLOY_LABELS = {"deploy-sandbox", "deploy-preview"}
+DEPLOY_LABELS = ("deploy-sandbox", "deploy-preview")
+SELF_APPROVE_LABEL = "allow-self-approve"
 HEAVY_REASON_PATTERNS = {
     "Touches infrastructure, deployment, workflow, policy, or ingress control paths": [
         ".github/actions/**",
@@ -78,6 +79,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--approvals-path", help="Optional path to a file containing approval count.")
     parser.add_argument("--approvers-path", help="Optional path to a file (JSON array or newline) with approver usernames.")
     parser.add_argument("--codeowners-path", help="Optional path to the CODEOWNERS file to validate owners.")
+    parser.add_argument("--label-trust-path", help="Optional path to trusted label metadata resolved by the workflow.")
     parser.add_argument(
         "--allow-self-approve",
         action="store_true",
@@ -107,6 +109,27 @@ def parse_approvers(path: Path) -> set[str]:
         names = [line.strip() for line in txt.splitlines() if line.strip()]
 
     return {n.lstrip("@") for n in names}
+
+
+def parse_label_trust(path: Path) -> dict[str, dict[str, Any]]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+
+    trust: dict[str, dict[str, Any]] = {}
+    for label, value in data.items():
+        if not isinstance(value, dict):
+            continue
+        trust[str(label)] = {
+            "present": bool(value.get("present")),
+            "actor": str(value.get("actor") or ""),
+            "trusted": bool(value.get("trusted")),
+            "labeledAt": value.get("labeledAt"),
+        }
+    return trust
 
 
 def parse_codeowners(path: Path) -> Dict[str, list[str]]:
@@ -204,6 +227,7 @@ def evaluate_policy(
     approvers: set[str] | None = None,
     codeowners: Dict[str, list[str]] | None = None,
     allow_self_approve: bool = False,
+    label_trust: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     pull_request = event["pull_request"]
     repository = event["repository"]
@@ -211,6 +235,19 @@ def evaluate_policy(
     pr_author = str(pull_request.get("user", {}).get("login", ""))
     labels = sorted(str(label["name"]) for label in pull_request.get("labels", []))
     has_deploy_label = any(label in DEPLOY_LABELS for label in labels)
+    trusted_deploy_labels = [
+        label
+        for label in DEPLOY_LABELS
+        if label in labels and label_trust and label_trust.get(label, {}).get("trusted")
+    ]
+    deploy_label = trusted_deploy_labels[0] if trusted_deploy_labels else None
+    deploy_label_info = label_trust.get(deploy_label, {}) if label_trust and deploy_label else {}
+    deploy_label_actor = str(deploy_label_info.get("actor") or "") if deploy_label_info else None
+    deploy_label_trusted = deploy_label is not None
+    self_approve_label_info = label_trust.get(SELF_APPROVE_LABEL, {}) if label_trust else {}
+    self_approve_label_actor = str(self_approve_label_info.get("actor") or "") if self_approve_label_info else None
+    self_approve_label_trusted = bool(self_approve_label_info.get("trusted"))
+    self_approve_allowed = allow_self_approve and self_approve_label_trusted
     is_dependabot_pr = pr_author == "dependabot[bot]" or branch.startswith("dependabot/")
     is_draft = bool(pull_request.get("draft", False))
     same_repo = pull_request["head"]["repo"]["full_name"] == repository["full_name"]
@@ -232,7 +269,7 @@ def evaluate_policy(
         if matched_owners:
             if approvers and any(a in matched_owners for a in approvers):
                 approval_exception = True
-            elif allow_self_approve and matched_owners == {pr_author}:
+            elif self_approve_allowed and matched_owners == {pr_author}:
                 # explicit opt-in for solo-maintainer self-approve
                 approval_exception = True
                 self_approve_used = True
@@ -244,18 +281,19 @@ def evaluate_policy(
     else:
         # no codeowners file loaded; fallback to numeric approvals
         approval_exception = approval_count >= 1
-    should_fail = requires_sandbox_label and not has_deploy_label and not approval_exception
     # detect critical path touches
     touches_critical_paths = any(path_matches(path, CRITICAL_PATH_PATTERNS) for path in changed_files)
+    critical_path_requires_sandbox = touches_critical_paths and not deploy_label_trusted
+    governance_satisfied = deploy_label_trusted or approval_exception
+    should_fail = requires_sandbox_label and (not governance_satisfied or critical_path_requires_sandbox)
 
     # blocking reasons (governance core)
     blocking_reasons: list[str] = []
     if classification == "heavy" and same_repo and not is_draft and not is_dependabot_pr:
-        # missing approvals (CODEOWNERS/ruleset) is a governance block
-        if not approval_exception:
-            blocking_reasons.append("missing_approvals")
-        if touches_critical_paths:
-            blocking_reasons.append("touches_critical_paths")
+        if not governance_satisfied:
+            blocking_reasons.append("missing_sandbox_label_or_approval")
+        if critical_path_requires_sandbox:
+            blocking_reasons.append("critical_path_requires_sandbox")
 
     block = len(blocking_reasons) > 0
 
@@ -282,11 +320,17 @@ def evaluate_policy(
             "This is a heavy-lane PR from a fork. The standard same-repository auto-apply sandbox path is unavailable, "
             "so this check does not enforce a deploy label."
         )
-    elif has_deploy_label:
+    elif deploy_label_trusted:
         decision = "pass"
         summary = (
-            "This PR is in the heavy lane and already carries a sandbox deploy label, so the reviewer-managed sandbox "
-            "requirement is satisfied."
+            "This PR is in the heavy lane and carries a trusted sandbox deploy label, so the reviewer-managed sandbox "
+            "requirement is satisfied and the sandbox deploy path may run."
+        )
+    elif critical_path_requires_sandbox:
+        decision = "fail"
+        summary = (
+            "This PR touches critical paths and must carry `deploy-sandbox` or `deploy-preview` before it can pass "
+            "the sandbox policy gate."
         )
     elif approval_exception:
         decision = "pass"
@@ -297,8 +341,9 @@ def evaluate_policy(
     else:
         decision = "fail"
         summary = (
-            "This PR is in the heavy lane and is missing `deploy-sandbox` or `deploy-preview` and does not have sufficient approvals. "
-            "Add one of those labels or get approval before asking the standard sandbox auto-apply flow to create a PR environment."
+            "This PR is in the heavy lane and is missing a trusted `deploy-sandbox`/`deploy-preview` label or sufficient approvals. "
+            "Have the repository owner add a sandbox deploy label, use the owner-only `allow-self-approve` path for non-critical changes, "
+            "or get an owner approval."
         )
     return {
         "version": "1",
@@ -307,21 +352,41 @@ def evaluate_policy(
         "changedFiles": changed_files,
         "classification": classification,
         "decision": decision,
+        "governanceMode": (
+            "fast"
+            if classification == "fast"
+            else "sandbox_deploy"
+            if deploy_label_trusted
+            else "self_approved"
+            if self_approve_used
+            else "approved"
+            if approval_exception
+            else "blocked"
+            if block
+            else "advisory"
+        ),
         "hasDeployLabel": has_deploy_label,
+        "deployLabel": deploy_label,
+        "deployLabelActor": deploy_label_actor,
+        "deployLabelTrusted": deploy_label_trusted,
         "isDevopsBranch": False,
         "isDependabotPr": is_dependabot_pr,
         "isDraft": is_draft,
         "reasonGroups": reason_groups,
         "requiresSandboxLabel": requires_sandbox_label,
+        "governanceSatisfied": governance_satisfied,
         "sameRepo": same_repo,
         "shouldFail": should_fail,
         "block": block,
         "blockingReasons": blocking_reasons,
+        "criticalPathRequiresSandbox": critical_path_requires_sandbox,
         "touchesCriticalPaths": touches_critical_paths,
         "summary": summary,
         "approvers": sorted(list(approvers)) if approvers else [],
         "matchedOwners": sorted(list(matched_owners)) if matched_owners else [],
         "selfApproveEligible": bool(allow_self_approve),
+        "selfApproveLabelActor": self_approve_label_actor,
+        "selfApproveLabelTrusted": self_approve_label_trusted,
         "selfApproveUsed": bool(self_approve_used),
         "selfApproveActor": self_approve_actor,
     }
@@ -329,12 +394,16 @@ def evaluate_policy(
 
 def print_report(report: dict[str, Any]) -> None:
     print(f"Sandbox policy decision: {report['decision']}")
+    print(f"Governance mode: {report.get('governanceMode', 'unknown')}")
     print(f"Lane classification: {report['classification']}")
     print(f"Branch: {report['branch']}")
     print(f"Deploy label present: {report['hasDeployLabel']}")
+    print(f"Trusted deploy label: {report.get('deployLabel') or 'none'}")
+    print(f"Deploy label actor: {report.get('deployLabelActor') or 'none'}")
     if report.get("selfApproveEligible"):
         print("Self-approve mode enabled: true")
         print(f"Self-approve actor: {report.get('selfApproveActor') or 'unknown'}")
+        print(f"Self-approve label actor: {report.get('selfApproveLabelActor') or 'none'}")
         print(f"Matched owners: {', '.join(report.get('matchedOwners', [])) or 'none'}")
     print(report["summary"])
 
@@ -372,6 +441,12 @@ def main(argv: list[str] | None = None) -> int:
                 codeowners = parse_codeowners(Path(args.codeowners_path))
             except Exception:
                 codeowners = None
+        label_trust: dict[str, dict[str, Any]] | None = None
+        if getattr(args, "label_trust_path", None):
+            try:
+                label_trust = parse_label_trust(Path(args.label_trust_path))
+            except Exception:
+                label_trust = {}
 
         report = evaluate_policy(
             load_event(Path(args.event_path)),
@@ -380,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
             approvers=approvers,
             codeowners=codeowners,
             allow_self_approve=getattr(args, "allow_self_approve", False),
+            label_trust=label_trust,
         )
         print_report(report)
 
