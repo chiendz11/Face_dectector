@@ -404,8 +404,8 @@ def main(argv: list[str] | None = None) -> int:
         if getattr(args, "report_path", None):
             try:
                 write_report(Path(args.report_path), err_report)
-            except Exception:
-                pass
+            except Exception as report_exc:
+                print(f"Failed to write evaluator error report: {report_exc}", file=sys.stderr)
         return 2
 
 
