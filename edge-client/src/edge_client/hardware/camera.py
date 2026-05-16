@@ -17,6 +17,10 @@ class CameraStream:
 
         return frame
 
-    def __del__(self):
-        if hasattr(self, "capture") and self.capture.isOpened():
+    def close(self) -> None:
+        if self.capture.isOpened():
             self.capture.release()
+
+    def __del__(self):
+        if hasattr(self, "capture"):
+            self.close()

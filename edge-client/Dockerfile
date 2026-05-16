@@ -44,8 +44,11 @@ COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt \
   && rm -rf /wheels
 
-COPY core ./core
-COPY ui ./ui
+COPY pyproject.toml ./pyproject.toml
+COPY src ./src
 COPY main.py .
+RUN pip install --no-cache-dir --no-deps .
 
-CMD ["python", "main.py"]
+EXPOSE 8080
+
+CMD ["edge-client"]

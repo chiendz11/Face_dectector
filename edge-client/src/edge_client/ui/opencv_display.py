@@ -11,7 +11,7 @@ WINDOW_NAME = "Face Detector Kiosk"
 @dataclass
 class OverlayStatus:
     camera_state: str = "LIVE"
-    instruction: str = "Please align your face inside the circle"
+    instruction: str = "Full-frame face detection active"
     recognition_state: str = "Waiting for face"
     recognition_level: str = "info"
     device_name: str = "unknown-device"
@@ -28,7 +28,6 @@ def render_frame(frame, status: OverlayStatus) -> bool:
     canvas = frame.copy()
     height, width = canvas.shape[:2]
 
-    _draw_face_guide(canvas, width, height)
     _draw_camera_state(canvas, status.camera_state)
     _draw_instruction(canvas, status.instruction)
     _draw_recognition_state(canvas, status.recognition_state, status.recognition_level, height)
@@ -41,13 +40,6 @@ def render_frame(frame, status: OverlayStatus) -> bool:
 
 def close_ui() -> None:
     cv2.destroyAllWindows()
-
-
-def _draw_face_guide(canvas, width: int, height: int) -> None:
-    center = (width // 2, height // 2)
-    radius = max(70, int(min(width, height) * 0.28))
-    cv2.circle(canvas, center, radius, (255, 220, 0), 3)
-
 
 def _draw_camera_state(canvas, camera_state: str) -> None:
     color = (0, 200, 0) if camera_state.upper() == "LIVE" else (0, 0, 255)
@@ -81,6 +73,7 @@ def _draw_instruction(canvas, instruction: str) -> None:
 def _draw_recognition_state(canvas, message: str, level: str, height: int) -> None:
     palette = {
         "success": (0, 170, 0),
+        "warning": (0, 210, 255),
         "failed": (0, 0, 220),
         "error": (0, 0, 220),
         "info": (0, 150, 230),

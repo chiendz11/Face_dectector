@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "face-detector-edge-client"
+version = "0.1.0"
+description = "Local edge kiosk client for camera-based face verification."
+requires-python = ">=3.11"
+dependencies = [
+  "numpy==2.2.6",
+  "opencv-python==4.12.0.88",
+  "mediapipe==0.10.33",
+  "requests==2.33.1",
+  "pillow==12.2.0",
+  "fastapi==0.116.1",
+  "uvicorn==0.35.0",
+]
+
+[project.scripts]
+edge-client = "edge_client.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"edge_client.ui" = ["static/*.css"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
