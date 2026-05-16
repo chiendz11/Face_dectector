@@ -29,6 +29,7 @@ HEAVY_REASON_PATTERNS = {
         ".trivyignore",
         "backend/Dockerfile",
         "docker-compose.ci.yml",
+        "docker-compose.dev.yml",
         "docker-compose.edge.yml",
         "docker-compose.yml",
         "edge-client/Dockerfile",
