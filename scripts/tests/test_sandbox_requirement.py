@@ -229,6 +229,16 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         self.assertEqual(report["decision"], "fail")
         self.assertTrue(report["shouldFail"])
 
+    def test_compose_override_change_without_label_fails(self) -> None:
+        report = evaluate_policy(
+            make_event(),
+            ["docker-compose.dev.yml"],
+        )
+
+        self.assertEqual(report["classification"], "heavy")
+        self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["shouldFail"])
+
     def test_qa_scripts_and_docs_stay_fast_lane(self) -> None:
         report = evaluate_policy(
             make_event(),

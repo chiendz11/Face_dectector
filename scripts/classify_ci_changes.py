@@ -12,6 +12,8 @@ APP_SHARED_EXACT = {
     ".trivyignore",
     "docker-compose.yml",
     "docker-compose.ci.yml",
+    "docker-compose.dev.yml",
+    "docker-compose.edge.yml",
     ".github/image-catalog.json",
     ".github/workflows/app-ci.yml",
     ".github/workflows/reusable-app-ci.yml",

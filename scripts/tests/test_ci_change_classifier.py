@@ -21,6 +21,14 @@ def test_shared_app_change_selects_all_images() -> None:
     assert result.image_names == "backend,frontend-admin,edge-client,nginx"
 
 
+def test_compose_override_change_selects_all_images() -> None:
+    result = classify_paths(["docker-compose.edge.yml"])
+
+    assert result.app_changed is True
+    assert result.app_shared_changed is True
+    assert result.image_names == "backend,frontend-admin,edge-client,nginx"
+
+
 def test_app_workflow_change_is_app_shared_and_platform() -> None:
     result = classify_paths([".github/workflows/reusable-app-ci.yml"])
 

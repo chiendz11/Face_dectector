@@ -11,6 +11,8 @@ on:
       - "nginx/**"
       - "docker-compose.yml"
       - "docker-compose.ci.yml"
+      - "docker-compose.dev.yml"
+      - "docker-compose.edge.yml"
       - ".trivyignore"
       - ".env.example"
       - "scripts/classify_ci_changes.py"
