@@ -1,6 +1,6 @@
 import numpy as np
 
-from ui import display
+from edge_client.ui import opencv_display as display
 
 
 class Calls:
