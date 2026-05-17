@@ -97,6 +97,10 @@ wait_for_command \
   "admin health endpoint" \
   "curl --silent --fail http://localhost/api/admin/health"
 
+wait_for_command \
+  "enrollment station frontend" \
+  "curl --silent --fail http://localhost/enroll/"
+
 export FACE_DETECTOR_BASE_URL="http://localhost"
 export FACE_DETECTOR_ADMIN_USERNAME="$ADMIN_USERNAME"
 export FACE_DETECTOR_ADMIN_PASSWORD="$ADMIN_PASSWORD"

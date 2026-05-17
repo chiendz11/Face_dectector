@@ -28,6 +28,11 @@ class EmployeeFaceEnrollResponse(BaseModel):
     message: str
 
 
+class EmployeeFaceEnrollSamplesResponse(EmployeeFaceEnrollResponse):
+    sample_count: int
+    device_name: str | None = None
+
+
 class RecognitionResult(BaseModel):
     matched: bool
     employee_code: str | None = None

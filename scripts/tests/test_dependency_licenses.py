@@ -40,6 +40,12 @@ def build_policy() -> dict[str, object]:
                     "package": "frontend-admin",
                     "privateOnly": True,
                     "reason": "Ignore the private workspace package.",
+                },
+                {
+                    "surface": "enrollment-station",
+                    "package": "enrollment-station",
+                    "privateOnly": True,
+                    "reason": "Ignore the private enrollment workspace package.",
                 }
             ],
         }
@@ -82,6 +88,26 @@ class DependencyLicensePolicyTest(unittest.TestCase):
 
         self.assertEqual(result["counts"], {"allowed": 0, "review": 1, "blocked": 0, "ignored": 0})
         self.assertEqual(result["findings"][0]["reason"], "review-required license token(s): CC-BY-4.0")
+
+    def test_private_enrollment_workspace_package_is_ignored(self) -> None:
+        result = evaluate_inventory_document(
+            surface="enrollment-station",
+            kind="node",
+            document={
+                "enrollment-station@0.1.0": {
+                    "licenses": "UNLICENSED",
+                    "private": True,
+                },
+                "react@18.3.1": {
+                    "licenses": "MIT",
+                },
+            },
+            policy=build_policy(),
+        )
+
+        self.assertEqual(result["counts"], {"allowed": 1, "review": 0, "blocked": 0, "ignored": 1})
+        ignored = [finding for finding in result["findings"] if finding["status"] == "ignored"]
+        self.assertEqual(ignored[0]["package"], "enrollment-station")
 
     def test_composite_expression_is_split_across_allowed_tokens(self) -> None:
         result = evaluate_inventory_document(
@@ -134,6 +160,10 @@ class DependencyLicensePolicyTest(unittest.TestCase):
         self.assertIn("policies/licenses/policy.json", evaluate_step["run"])
         self.assertIn(
             "--inventory frontend-admin:node:.artifacts/licenses/frontend-admin.json",
+            evaluate_step["run"],
+        )
+        self.assertIn(
+            "--inventory enrollment-station:node:.artifacts/licenses/enrollment-station.json",
             evaluate_step["run"],
         )
 

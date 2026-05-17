@@ -12,11 +12,15 @@ from app.services.vector_search_service import VectorSearchService
 from app.services.recognition_service import RecognitionService
 
 
+def make_hash_embedding_service() -> DeepFaceService:
+    return DeepFaceService(provider="hash", embedding_dimensions=16)
+
+
 def test_recognize_face_returns_granted_when_embedding_matches() -> None:
     app = FastAPI()
     app.include_router(vision_router, prefix="/api")
     client = TestClient(app)
-    deepface_service = DeepFaceService()
+    deepface_service = make_hash_embedding_service()
     vector_search_service = VectorSearchService(match_threshold=0.8)
     minio_service = MinioService()
     recognition_service = RecognitionService(
@@ -53,7 +57,7 @@ def test_recognize_face_returns_bad_request_for_empty_file() -> None:
     app.include_router(vision_router, prefix="/api")
     client = TestClient(app)
     recognition_service = RecognitionService(
-        deepface_service=DeepFaceService(),
+        deepface_service=make_hash_embedding_service(),
         vector_search_service=VectorSearchService(),
         minio_service=MinioService(),
     )
@@ -75,7 +79,7 @@ def test_recognize_face_returns_rejected_when_no_match_found() -> None:
     app.include_router(vision_router, prefix="/api")
     client = TestClient(app)
     recognition_service = RecognitionService(
-        deepface_service=DeepFaceService(),
+        deepface_service=make_hash_embedding_service(),
         vector_search_service=VectorSearchService(match_threshold=0.99),
         minio_service=MinioService(),
     )
@@ -102,7 +106,7 @@ def test_recognize_face_without_device_name_still_returns_200() -> None:
     app = FastAPI()
     app.include_router(vision_router, prefix="/api")
     client = TestClient(app)
-    deepface_service = DeepFaceService()
+    deepface_service = make_hash_embedding_service()
     vector_search_service = VectorSearchService(match_threshold=0.8)
     image_bytes = b"employee-no-device-name"
     vector_search_service.upsert_face_embedding(
@@ -134,7 +138,7 @@ def test_recognize_face_granted_response_includes_snapshot_url() -> None:
     app = FastAPI()
     app.include_router(vision_router, prefix="/api")
     client = TestClient(app)
-    deepface_service = DeepFaceService()
+    deepface_service = make_hash_embedding_service()
     vector_search_service = VectorSearchService(match_threshold=0.8)
     minio_service = MinioService(
         bucket_name="snapshots",
@@ -173,7 +177,7 @@ def test_recognize_face_response_echoes_device_name() -> None:
     app.include_router(vision_router, prefix="/api")
     client = TestClient(app)
     recognition_service = RecognitionService(
-        deepface_service=DeepFaceService(),
+        deepface_service=make_hash_embedding_service(),
         vector_search_service=VectorSearchService(match_threshold=0.99),
         minio_service=MinioService(),
     )

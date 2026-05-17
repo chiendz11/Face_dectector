@@ -27,6 +27,10 @@ data:
         server {{ .Values.frontendAdmin.service.name }}:{{ .Values.frontendAdmin.service.port }};
       }
 
+      upstream enrollment_upstream {
+        server {{ .Values.enrollmentStation.service.name }}:{{ .Values.enrollmentStation.service.port }};
+      }
+
       server {
         listen {{ .Values.nginx.service.containerPort }};
         server_name _;
@@ -53,6 +57,19 @@ data:
 
         location /admin/ {
           proxy_pass http://admin_upstream/;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location = /enroll {
+          return 302 /enroll/;
+        }
+
+        location /enroll/ {
+          proxy_pass http://enrollment_upstream/;
           proxy_http_version 1.1;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;

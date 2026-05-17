@@ -20,6 +20,10 @@ services:
     build:
       context: ./frontend-admin
 
+  enrollment-station:
+    build:
+      context: ./enrollment-station
+
   nginx:
     build:
       context: ./nginx

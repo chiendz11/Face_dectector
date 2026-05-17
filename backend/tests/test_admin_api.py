@@ -15,7 +15,8 @@ from app.services.vector_search_service import VectorSearchService
 
 
 class FakeDeepFaceService:
-    def embed_face(self, image_bytes: bytes) -> list[float]:
+    def embed_face(self, image_bytes: bytes, enforce_detection: bool | None = None) -> list[float]:
+        assert enforce_detection is True
         if not image_bytes:
             raise ValueError("image_bytes must not be empty")
         return [0.25] * settings.embedding_dimensions
@@ -152,6 +153,96 @@ def test_admin_enroll_face_upserts_embedding(sqlite_session) -> None:
     assert result["metadata"] == {"source": "admin-enroll", "filename": "face.jpg"}
 
 
+def test_admin_enroll_face_samples_averages_live_capture_embeddings(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+
+    employee_registry = EmployeeRegistryService(sqlite_session)
+    employee_registry.create_employee(
+        EmployeeCreate(employee_code="emp-105", full_name="Live Capture", department="Security")
+    )
+    vector_search_service = VectorSearchService(
+        db=None,
+        read_db=None,
+        embedding_dimensions=settings.embedding_dimensions,
+    )
+
+    class SequenceDeepFaceService:
+        def __init__(self) -> None:
+            self.next_value = 0.1
+
+        def embed_face(self, image_bytes: bytes, enforce_detection: bool | None = None) -> list[float]:
+            assert enforce_detection is True
+            value = self.next_value
+            self.next_value += 0.1
+            return [value] * settings.embedding_dimensions
+
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: employee_registry
+    client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
+    client.app.dependency_overrides[get_deepface_service] = lambda: SequenceDeepFaceService()
+    client.app.dependency_overrides[get_current_user] = lambda: "admin-operator"
+
+    response = client.post(
+        "/api/admin/employees/EMP-105/enroll-samples",
+        data={"device_name": "enroll-station-01"},
+        files=[
+            ("files", ("sample-1.jpg", b"first", "image/jpeg")),
+            ("files", ("sample-2.jpg", b"second", "image/jpeg")),
+            ("files", ("sample-3.jpg", b"third", "image/jpeg")),
+        ],
+    )
+
+    result = vector_search_service.search_similar_face([0.2] * settings.embedding_dimensions)
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["employee_code"] == "EMP-105"
+    assert payload["enrolled"] is True
+    assert payload["sample_count"] == 3
+    assert payload["device_name"] == "enroll-station-01"
+    assert payload["embedding_dimensions"] == settings.embedding_dimensions
+    assert result["match"] == "EMP-105"
+    assert result["metadata"]["source"] == "enrollment-station"
+    assert result["metadata"]["operator"] == "admin-operator"
+    assert result["metadata"]["sample_count"] == 3
+
+
+def test_admin_enroll_face_samples_requires_minimum_sample_count(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+
+    employee_registry = EmployeeRegistryService(sqlite_session)
+    employee_registry.create_employee(
+        EmployeeCreate(employee_code="emp-106", full_name="Too Few Samples", department="Security")
+    )
+
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: employee_registry
+    client.app.dependency_overrides[get_vector_search_service] = lambda: VectorSearchService(
+        db=None,
+        read_db=None,
+        embedding_dimensions=settings.embedding_dimensions,
+    )
+    client.app.dependency_overrides[get_deepface_service] = lambda: FakeDeepFaceService()
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    response = client.post(
+        "/api/admin/employees/EMP-106/enroll-samples",
+        files=[
+            ("files", ("sample-1.jpg", b"first", "image/jpeg")),
+            ("files", ("sample-2.jpg", b"second", "image/jpeg")),
+        ],
+    )
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "at least 3 face samples are required"
+
+
 def test_admin_enroll_face_returns_not_found_for_unknown_employee(sqlite_session) -> None:
     app = FastAPI()
     app.include_router(admin_router, prefix="/api")
@@ -215,11 +306,13 @@ def test_admin_enroll_face_upserts_on_second_enroll(sqlite_session) -> None:
     )
 
     class FirstImageService:
-        def embed_face(self, image_bytes: bytes) -> list[float]:
+        def embed_face(self, image_bytes: bytes, enforce_detection: bool | None = None) -> list[float]:
+            assert enforce_detection is True
             return [0.1] * settings.embedding_dimensions
 
     class SecondImageService:
-        def embed_face(self, image_bytes: bytes) -> list[float]:
+        def embed_face(self, image_bytes: bytes, enforce_detection: bool | None = None) -> list[float]:
+            assert enforce_detection is True
             return [0.9] * settings.embedding_dimensions
 
     vector_search_service = VectorSearchService(db=None, read_db=None, embedding_dimensions=settings.embedding_dimensions)

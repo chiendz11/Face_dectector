@@ -9,8 +9,12 @@ from app.services.vector_search_service import VectorSearchService
 from app.services.recognition_service import RecognitionService
 
 
+def make_hash_embedding_service(embedding_dimensions: int = 16) -> DeepFaceService:
+    return DeepFaceService(provider="hash", embedding_dimensions=embedding_dimensions)
+
+
 def test_deepface_service_returns_deterministic_embedding() -> None:
-    service = DeepFaceService()
+    service = make_hash_embedding_service()
 
     left = service.embed_face(b"employee-face")
     right = service.embed_face(b"employee-face")
@@ -21,7 +25,7 @@ def test_deepface_service_returns_deterministic_embedding() -> None:
 
 
 def test_deepface_service_rejects_empty_image_bytes() -> None:
-    service = DeepFaceService()
+    service = make_hash_embedding_service()
 
     with pytest.raises(ValueError, match="image_bytes must not be empty"):
         service.embed_face(b"")
@@ -204,7 +208,7 @@ def test_employee_registry_service_rejects_blank_full_name(sqlite_session) -> No
 
 
 def test_recognition_service_returns_granted_for_known_face() -> None:
-    deepface_service = DeepFaceService()
+    deepface_service = make_hash_embedding_service()
     vector_search_service = VectorSearchService(match_threshold=0.8)
     minio_service = MinioService()
     recognition_service = RecognitionService(
@@ -232,7 +236,7 @@ def test_recognition_service_returns_granted_for_known_face() -> None:
 
 def test_recognition_service_returns_rejected_for_unknown_face() -> None:
     recognition_service = RecognitionService(
-        deepface_service=DeepFaceService(),
+        deepface_service=make_hash_embedding_service(),
         vector_search_service=VectorSearchService(match_threshold=0.99),
         minio_service=MinioService(),
     )
@@ -398,7 +402,7 @@ def test_minio_service_bucket_already_exists_skips_create(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 def test_recognition_service_includes_snapshot_url_in_response() -> None:
-    deepface_service = DeepFaceService()
+    deepface_service = make_hash_embedding_service()
     vector_search_service = VectorSearchService(match_threshold=0.8)
     minio_service = MinioService(
         bucket_name="snapshots",
@@ -427,7 +431,7 @@ def test_recognition_service_includes_snapshot_url_in_response() -> None:
 
 def test_recognition_service_with_no_device_name_uses_fallback() -> None:
     recognition_service = RecognitionService(
-        deepface_service=DeepFaceService(),
+        deepface_service=make_hash_embedding_service(),
         vector_search_service=VectorSearchService(match_threshold=0.99),
         minio_service=MinioService(),
     )
@@ -447,9 +451,24 @@ def test_recognition_service_with_no_device_name_uses_fallback() -> None:
 # ---------------------------------------------------------------------------
 
 def test_deepface_service_returns_different_embeddings_for_different_inputs() -> None:
-    service = DeepFaceService()
+    service = make_hash_embedding_service()
 
     embedding_a = service.embed_face(b"face-of-person-a")
     embedding_b = service.embed_face(b"face-of-person-b")
 
     assert embedding_a != embedding_b
+
+
+def test_deepface_provider_rejects_known_model_dimension_mismatch() -> None:
+    with pytest.raises(ValueError, match="Facenet512 returns 512 dimensions"):
+        DeepFaceService(provider="deepface", model_name="Facenet512", embedding_dimensions=16)
+
+
+def test_deepface_provider_fails_closed_when_dependency_missing(monkeypatch) -> None:
+    from app.services import deepface_service as deepface_module
+
+    monkeypatch.setattr(deepface_module, "DeepFace", None)
+    service = DeepFaceService(provider="deepface", model_name="Facenet512", embedding_dimensions=512)
+
+    with pytest.raises(RuntimeError, match="DeepFace embedding failed"):
+        service.embed_face(b"image-bytes")

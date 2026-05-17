@@ -198,6 +198,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /admin/employees/{employee_code}/enroll-samples:
+    post:
+      tags: [admin]
+      summary: Enroll an employee from multiple live face samples
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: employee_code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  minItems: 3
+                  maxItems: 10
+                  items:
+                    type: string
+                    format: binary
+                device_name:
+                  type: string
+                  nullable: true
+              required: [files]
+      responses:
+        '200':
+          description: Multi-sample face embedding persisted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeFaceEnrollSamplesResponse'
+        '400':
+          description: Invalid samples, sample count, or employee code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Embedding provider unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /vision/health:
     get:
       tags: [vision]
@@ -322,6 +383,17 @@ components:
         message:
           type: string
       required: [employee_code, enrolled, embedding_dimensions, message]
+    EmployeeFaceEnrollSamplesResponse:
+      allOf:
+        - $ref: '#/components/schemas/EmployeeFaceEnrollResponse'
+        - type: object
+          properties:
+            sample_count:
+              type: integer
+            device_name:
+              type: string
+              nullable: true
+          required: [sample_count]
     RecognitionResult:
       type: object
       properties:

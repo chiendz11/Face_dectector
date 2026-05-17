@@ -18,6 +18,9 @@ services:
   frontend-admin:
     image: "${IMAGE_HOST:-ghcr.io}/${REGISTRY_ORG}/face-detector-admin:${IMAGE_TAG}"
 
+  enrollment-station:
+    image: "${IMAGE_HOST:-ghcr.io}/${REGISTRY_ORG}/face-detector-enrollment:${IMAGE_TAG}"
+
   nginx:
     image: "${IMAGE_HOST:-ghcr.io}/${REGISTRY_ORG}/face-detector-nginx:${IMAGE_TAG}"
     environment:

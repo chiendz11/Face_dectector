@@ -33,6 +33,11 @@ frontendAdmin:
     tag: latest
     digest: ""
 
+enrollmentStation:
+  image:
+    tag: latest
+    digest: ""
+
 nginx:
   replicaCount: 2
   image:

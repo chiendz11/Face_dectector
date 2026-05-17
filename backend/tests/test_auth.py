@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.main import app
 from app.services.auth_service import AuthService
 
@@ -11,7 +12,10 @@ def test_login_returns_access_token() -> None:
 
     response = client.post(
         "/api/auth/login",
-        json={"username": "admin", "password": "admin"},
+        json={
+            "username": settings.admin_username,
+            "password": settings.admin_password,
+        },
     )
 
     assert response.status_code == 200
@@ -33,7 +37,10 @@ def test_login_rejects_wrong_password() -> None:
 
     response = client.post(
         "/api/auth/login",
-        json={"username": "admin", "password": "totally-wrong-password"},
+        json={
+            "username": settings.admin_username,
+            "password": "totally-wrong-password",
+        },
     )
 
     assert response.status_code == 401
@@ -45,7 +52,7 @@ def test_login_rejects_missing_password_field() -> None:
 
     response = client.post(
         "/api/auth/login",
-        json={"username": "admin"},
+        json={"username": settings.admin_username},
     )
 
     assert response.status_code == 422
@@ -65,7 +72,7 @@ def test_protected_route_with_invalid_token_returns_401() -> None:
 def test_protected_route_with_expired_token_returns_401() -> None:
     auth_service = AuthService()
     expired_token = auth_service.create_access_token(
-        subject="admin",
+        subject=settings.admin_username,
         expires_delta=timedelta(seconds=-1),
     )
     client = TestClient(app)

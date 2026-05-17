@@ -454,6 +454,7 @@ jobs:
           {
             echo "backend=ghcr.io/${OWNER}/face-detector-backend"
             echo "frontend=ghcr.io/${OWNER}/face-detector-admin"
+            echo "enrollment=ghcr.io/${OWNER}/face-detector-enrollment"
             echo "nginx=ghcr.io/${OWNER}/face-detector-nginx"
           } >> "$GITHUB_OUTPUT"
 
@@ -558,6 +559,7 @@ jobs:
           TARGET_REVISION: ${{ steps.context.outputs.target_revision }}
           BACKEND_IMAGE_REPOSITORY: ${{ steps.image-meta.outputs.backend }}
           FRONTEND_IMAGE_REPOSITORY: ${{ steps.image-meta.outputs.frontend }}
+          ENROLLMENT_IMAGE_REPOSITORY: ${{ steps.image-meta.outputs.enrollment }}
           NGINX_IMAGE_REPOSITORY: ${{ steps.image-meta.outputs.nginx }}
           IMAGE_PULL_SECRET_PARAMETER: ${{ steps.ghcr-auth.outputs.parameter_block }}
         run: envsubst < "$APPLICATION_TEMPLATE" | kubectl apply -f -
@@ -565,7 +567,7 @@ jobs:
       - name: Wait for application rollout
         if: steps.cluster.outputs.exists == 'true'
         run: |
-          for deployment in backend frontend-admin nginx; do
+          for deployment in backend frontend-admin enrollment-station nginx; do
             for _ in $(seq 1 30); do
               if kubectl get deployment/${deployment} --namespace "$APP_NAMESPACE" >/dev/null 2>&1; then
                 break
@@ -573,7 +575,7 @@ jobs:
               sleep 10
             done
           done
-          for deployment in backend frontend-admin nginx; do
+          for deployment in backend frontend-admin enrollment-station nginx; do
             kubectl rollout status deployment/${deployment} --namespace "$APP_NAMESPACE" --timeout=10m
           done
           kubectl rollout status deployment/worker --namespace "$APP_NAMESPACE" --timeout=10m || true

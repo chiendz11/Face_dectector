@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 pytest.importorskip("python_multipart")
 
 from app.main import app
+from app.core.config import settings
 
 
 def test_root_health_returns_service_metadata() -> None:
@@ -15,9 +16,11 @@ def test_root_health_returns_service_metadata() -> None:
     assert response.status_code == 200
     assert payload["status"] == "ok"
     assert payload["service"] == "Face Detector Backend"
-    assert payload["model_name"] == "VGG-Face"
-    assert payload["model_version"] == "2026.04-baseline"
-    assert payload["match_threshold"] == 0.35
+    assert payload["embedding_provider"] == settings.embedding_provider
+    assert payload["model_name"] == settings.model_name
+    assert payload["model_version"] == settings.model_version
+    assert payload["embedding_dimensions"] == settings.embedding_dimensions
+    assert payload["match_threshold"] == settings.match_threshold
 
 
 def test_admin_health_returns_ok() -> None:

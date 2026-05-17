@@ -56,6 +56,20 @@ updates:
       - "dependencies"
       - "frontend"
 
+  # Enrollment station dependencies.
+  - package-ecosystem: "npm"
+    directory: "/enrollment-station"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:10"
+      timezone: "UTC"
+    target-branch: "master"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "frontend"
+
   # Infrastructure dependencies.
   - package-ecosystem: "terraform"
     directory: "/terraform/ssm"
@@ -116,6 +130,19 @@ updates:
       interval: "weekly"
       day: "wednesday"
       time: "03:20"
+      timezone: "UTC"
+    target-branch: "master"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+
+  - package-ecosystem: "docker"
+    directory: "/enrollment-station"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "03:25"
       timezone: "UTC"
     target-branch: "master"
     open-pull-requests-limit: 5

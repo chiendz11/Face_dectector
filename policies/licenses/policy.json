@@ -43,6 +43,12 @@
             "package": "frontend-admin",
             "privateOnly": true,
             "reason": "Ignore the repository's private frontend workspace package."
+        },
+        {
+            "surface": "enrollment-station",
+            "package": "enrollment-station",
+            "privateOnly": true,
+            "reason": "Ignore the repository's private enrollment station workspace package."
         }
     ]
 }
