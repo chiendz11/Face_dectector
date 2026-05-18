@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     match_threshold: float = 0.55
     enrollment_min_samples: int = 3
     enrollment_max_samples: int = 10
+    enrollment_session_ttl_minutes: int = 10
     dedupe_window_seconds: int = 30
     db_retry_attempts: int = 3
     db_retry_backoff_seconds: float = 0.5

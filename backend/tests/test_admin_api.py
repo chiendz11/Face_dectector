@@ -5,12 +5,14 @@ from app.api.dependencies import (
     get_current_user,
     get_deepface_service,
     get_employee_registry_service,
+    get_enrollment_session_service,
     get_vector_search_service,
 )
 from app.api.endpoints_admin import router as admin_router
 from app.core.config import settings
 from app.models.schemas import EmployeeCreate
 from app.services.employee_registry import EmployeeRegistryService
+from app.services.enrollment_session_service import EnrollmentSessionService
 from app.services.vector_search_service import VectorSearchService
 
 
@@ -26,7 +28,13 @@ def test_admin_employee_crud_flow(sqlite_session) -> None:
     app = FastAPI()
     app.include_router(admin_router, prefix="/api")
     client = TestClient(app)
+    vector_search_service = VectorSearchService(
+        db=None,
+        read_db=None,
+        embedding_dimensions=settings.embedding_dimensions,
+    )
     client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
 
     create_response = client.post(
@@ -84,7 +92,13 @@ def test_admin_delete_employee_returns_not_found_for_unknown_employee(sqlite_ses
     app = FastAPI()
     app.include_router(admin_router, prefix="/api")
     client = TestClient(app)
+    vector_search_service = VectorSearchService(
+        db=None,
+        read_db=None,
+        embedding_dimensions=settings.embedding_dimensions,
+    )
     client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
 
     response = client.delete("/api/admin/employees/EMP-404")
@@ -99,7 +113,13 @@ def test_admin_delete_employee_rejects_blank_employee_code(sqlite_session) -> No
     app = FastAPI()
     app.include_router(admin_router, prefix="/api")
     client = TestClient(app)
+    vector_search_service = VectorSearchService(
+        db=None,
+        read_db=None,
+        embedding_dimensions=settings.embedding_dimensions,
+    )
     client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
 
     response = client.delete("/api/admin/employees/%20%20")
@@ -108,6 +128,59 @@ def test_admin_delete_employee_rejects_blank_employee_code(sqlite_session) -> No
 
     assert response.status_code == 400
     assert response.json()["detail"] == "employee_code must not be empty"
+
+
+def test_admin_update_employee_changes_editable_fields(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    service = EmployeeRegistryService(sqlite_session)
+    service.create_employee(EmployeeCreate(employee_code="emp-107", full_name="Old Name", department="Ops"))
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: service
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    response = client.patch(
+        "/api/admin/employees/EMP-107",
+        json={"full_name": "New Name", "department": "Security"},
+    )
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["employee_code"] == "EMP-107"
+    assert payload["full_name"] == "New Name"
+    assert payload["department"] == "Security"
+    assert payload["active"] is True
+
+
+def test_admin_delete_employee_soft_deletes_and_revokes_embedding(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    employee_registry = EmployeeRegistryService(sqlite_session)
+    employee_registry.create_employee(EmployeeCreate(employee_code="emp-108", full_name="Soft Delete", department="Ops"))
+    vector_search_service = VectorSearchService(
+        db=None,
+        read_db=None,
+        embedding_dimensions=settings.embedding_dimensions,
+    )
+    vector_search_service.upsert_face_embedding("EMP-108", [0.5] * settings.embedding_dimensions)
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: employee_registry
+    client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    delete_response = client.delete("/api/admin/employees/EMP-108")
+    active_list_response = client.get("/api/admin/employees")
+    inactive_list_response = client.get("/api/admin/employees?include_inactive=true")
+    match_result = vector_search_service.search_similar_face([0.5] * settings.embedding_dimensions)
+
+    client.app.dependency_overrides.clear()
+
+    assert delete_response.status_code == 200
+    assert active_list_response.json() == {"items": [], "total": 0}
+    assert inactive_list_response.json()["items"][0]["active"] is False
+    assert match_result["match"] is None
 
 
 def test_admin_enroll_face_upserts_embedding(sqlite_session) -> None:
@@ -208,6 +281,86 @@ def test_admin_enroll_face_samples_averages_live_capture_embeddings(sqlite_sessi
     assert result["metadata"]["source"] == "enrollment-station"
     assert result["metadata"]["operator"] == "admin-operator"
     assert result["metadata"]["sample_count"] == 3
+
+
+def test_admin_create_enrollment_session_returns_one_time_token(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    employee_registry = EmployeeRegistryService(sqlite_session)
+    employee_registry.create_employee(
+        EmployeeCreate(employee_code="emp-109", full_name="Session User", department="Security")
+    )
+    session_service = EnrollmentSessionService(sqlite_session)
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: employee_registry
+    client.app.dependency_overrides[get_enrollment_session_service] = lambda: session_service
+    client.app.dependency_overrides[get_current_user] = lambda: "admin-creator"
+
+    response = client.post("/api/admin/employees/EMP-109/enrollment-sessions")
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["employee_code"] == "EMP-109"
+    assert payload["status"] == "pending"
+    assert payload["token"]
+    assert payload["enrollment_url"].startswith("/admin/#/enroll/session/")
+
+
+def test_admin_complete_enrollment_session_uses_token_without_admin_login(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    employee_registry = EmployeeRegistryService(sqlite_session)
+    employee_registry.create_employee(
+        EmployeeCreate(employee_code="emp-110", full_name="Token Capture", department="Security")
+    )
+    session_service = EnrollmentSessionService(sqlite_session)
+    record, token = session_service.create_session(employee_code="EMP-110", created_by="admin-creator")
+    vector_search_service = VectorSearchService(
+        db=None,
+        read_db=None,
+        embedding_dimensions=settings.embedding_dimensions,
+    )
+
+    class SequenceDeepFaceService:
+        def __init__(self) -> None:
+            self.next_value = 0.2
+
+        def embed_face(self, image_bytes: bytes, enforce_detection: bool | None = None) -> list[float]:
+            assert enforce_detection is True
+            value = self.next_value
+            self.next_value += 0.1
+            return [value] * settings.embedding_dimensions
+
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: employee_registry
+    client.app.dependency_overrides[get_enrollment_session_service] = lambda: session_service
+    client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
+    client.app.dependency_overrides[get_deepface_service] = lambda: SequenceDeepFaceService()
+
+    response = client.post(
+        f"/api/admin/enrollment-sessions/{token}/complete",
+        data={"device_name": "admin-browser"},
+        files=[
+            ("files", ("sample-1.jpg", b"first", "image/jpeg")),
+            ("files", ("sample-2.jpg", b"second", "image/jpeg")),
+            ("files", ("sample-3.jpg", b"third", "image/jpeg")),
+        ],
+    )
+
+    result = vector_search_service.search_similar_face([0.3] * settings.embedding_dimensions)
+    refreshed = session_service.get_session(token)
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["sample_count"] == 3
+    assert result["match"] == "EMP-110"
+    assert result["metadata"]["source"] == "admin-enrollment-session"
+    assert result["metadata"]["operator"] == "admin-creator"
+    assert result["metadata"]["enrollment_session_id"] == record.id
+    assert refreshed.status == "completed"
 
 
 def test_admin_enroll_face_samples_requires_minimum_sample_count(sqlite_session) -> None:

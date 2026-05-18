@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import EnrollmentCapture from "../components/EnrollmentCapture";
 import StatCard from "../components/StatCard";
 
 const defaultSession = {
-  employees: [],
   status: "ready",
-  error: "",
 };
 
 export default function Dashboard() {
@@ -12,26 +11,32 @@ export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
   const [status, setStatus] = useState(defaultSession.status);
   const [error, setError] = useState("");
-  const [enrollMessage, setEnrollMessage] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState({});
+  const [message, setMessage] = useState("");
+  const [includeInactive, setIncludeInactive] = useState(false);
   const [credentials, setCredentials] = useState({ username: "admin", password: "admin" });
   const [newEmployee, setNewEmployee] = useState({ employee_code: "", full_name: "", department: "" });
+  const [editingCode, setEditingCode] = useState("");
+  const [editEmployee, setEditEmployee] = useState({ full_name: "", department: "" });
+  const [enrollmentSession, setEnrollmentSession] = useState(null);
 
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const jsonHeaders = useMemo(() => ({ "Content-Type": "application/json", ...authHeaders }), [authHeaders]);
+  const activeEmployees = employees.filter((employee) => employee.active !== false);
+  const inactiveEmployees = employees.filter((employee) => employee.active === false);
 
   useEffect(() => {
     if (token) {
       fetchEmployees();
     }
-  }, [token]);
+  }, [token, includeInactive]);
 
-  const fetchEmployees = async () => {
+  async function fetchEmployees() {
     setStatus("loading");
     setError("");
 
     try {
-      const response = await fetch("/api/admin/employees", {
+      const suffix = includeInactive ? "?include_inactive=true" : "";
+      const response = await fetch(`/api/admin/employees${suffix}`, {
         method: "GET",
         headers: authHeaders,
       });
@@ -48,14 +53,13 @@ export default function Dashboard() {
       const payload = await response.json();
       setEmployees(payload.items || []);
       setStatus("loaded");
-      setEnrollMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
     }
-  };
+  }
 
-  const handleLogin = async (event) => {
+  async function handleLogin(event) {
     event.preventDefault();
     setStatus("loading");
     setError("");
@@ -79,22 +83,24 @@ export default function Dashboard() {
       setError(err instanceof Error ? err.message : "Login failed");
       setStatus("error");
     }
-  };
+  }
 
-  const handleLogout = () => {
+  function handleLogout() {
     localStorage.removeItem("admin_token");
     setToken("");
     setEmployees([]);
-    setSelectedFiles({});
-    setEnrollMessage("");
+    setEditingCode("");
+    setEnrollmentSession(null);
+    setMessage("");
     setStatus(defaultSession.status);
     setError("");
-  };
+  }
 
-  const handleCreateEmployee = async (event) => {
+  async function handleCreateEmployee(event) {
     event.preventDefault();
     setStatus("loading");
     setError("");
+    setMessage("");
 
     try {
       const response = await fetch("/api/admin/employees", {
@@ -108,45 +114,42 @@ export default function Dashboard() {
         return;
       }
 
+      const payload = await response.json();
       if (!response.ok) {
-        const payload = await response.json();
         throw new Error(payload.detail || "Create employee failed");
       }
 
       await fetchEmployees();
       setNewEmployee({ employee_code: "", full_name: "", department: "" });
+      setMessage(`Employee ${payload.employee_code} created.`);
       setStatus("loaded");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
       setStatus("error");
     }
-  };
+  }
 
-  const handleFileSelect = (employeeCode, file) => {
-    setSelectedFiles((prev) => ({ ...prev, [employeeCode]: file || null }));
-  };
+  function startEdit(employee) {
+    setEditingCode(employee.employee_code);
+    setEditEmployee({
+      full_name: employee.full_name || "",
+      department: employee.department || "",
+    });
+    setError("");
+    setMessage("");
+  }
 
-  const handleEnrollFace = async (event, employeeCode) => {
+  async function submitEdit(event, employeeCode) {
     event.preventDefault();
     setStatus("loading");
     setError("");
-    setEnrollMessage("");
-
-    const selectedFile = selectedFiles[employeeCode];
-    if (!selectedFile) {
-      setError("Please select an image file before enrolling.");
-      setStatus("error");
-      return;
-    }
+    setMessage("");
 
     try {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-
-      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeCode)}/enroll`, {
-        method: "POST",
-        headers: authHeaders,
-        body: formData,
+      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeCode)}`, {
+        method: "PATCH",
+        headers: jsonHeaders,
+        body: JSON.stringify(editEmployee),
       });
 
       if (response.status === 401) {
@@ -156,17 +159,120 @@ export default function Dashboard() {
 
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload.detail || "Enroll face failed");
+        throw new Error(payload.detail || "Update employee failed");
       }
 
-      setEnrollMessage(payload.message || `Face enrolled for ${employeeCode}.`);
-      setSelectedFiles((prev) => ({ ...prev, [employeeCode]: null }));
+      setEditingCode("");
+      await fetchEmployees();
+      setMessage(`Employee ${payload.employee_code} updated.`);
       setStatus("loaded");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Enroll face failed");
+      setError(err instanceof Error ? err.message : "Update failed");
       setStatus("error");
     }
-  };
+  }
+
+  async function deactivateEmployee(employeeCode) {
+    setStatus("loading");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeCode)}`, {
+        method: "DELETE",
+        headers: authHeaders,
+      });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail || "Deactivate employee failed");
+      }
+
+      await fetchEmployees();
+      setMessage(`Employee ${payload.employee_code} deactivated.`);
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Deactivate failed");
+      setStatus("error");
+    }
+  }
+
+  async function restoreEmployee(employeeCode) {
+    setStatus("loading");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeCode)}/restore`, {
+        method: "POST",
+        headers: authHeaders,
+      });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail || "Restore employee failed");
+      }
+
+      await fetchEmployees();
+      setMessage(`Employee ${payload.employee_code} restored.`);
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restore failed");
+      setStatus("error");
+    }
+  }
+
+  async function createEnrollmentSession(employee) {
+    setStatus("loading");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `/api/admin/employees/${encodeURIComponent(employee.employee_code)}/enrollment-sessions`,
+        {
+          method: "POST",
+          headers: authHeaders,
+        },
+      );
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail || "Create enrollment session failed");
+      }
+
+      setEnrollmentSession({
+        ...payload,
+        full_name: employee.full_name,
+        department: employee.department,
+      });
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Create enrollment session failed");
+      setStatus("error");
+    }
+  }
+
+  function handleEnrollmentComplete(payload) {
+    setMessage(payload.message || "Enrollment completed.");
+    setEnrollmentSession(null);
+    fetchEmployees();
+  }
 
   return (
     <main className="page-shell">
@@ -175,7 +281,7 @@ export default function Dashboard() {
         <h1>Admin workspace for a practical office access-control system.</h1>
         <p className="lead">
           {token
-            ? "Manage your staff list and watch the kiosk recognition pipeline."
+            ? "Manage staff identities, edit employee records, and issue token-bound face enrollment sessions."
             : "Log in to connect this admin UI to the backend API and manage employees."}
         </p>
       </section>
@@ -211,8 +317,8 @@ export default function Dashboard() {
       ) : (
         <>
           <section className="grid">
-            <StatCard title="Employees" value={employees.length.toString()} hint="Registered staff identities" />
-            <StatCard title="Gates" value="1" hint="Primary kiosk connection" />
+            <StatCard title="Active employees" value={activeEmployees.length.toString()} hint="Available for access checks" />
+            <StatCard title="Inactive records" value={inactiveEmployees.length.toString()} hint="Soft-deleted audit records" />
             <StatCard title="Status" value={status} hint="Backend API session state" />
           </section>
 
@@ -254,11 +360,29 @@ export default function Dashboard() {
                 Add employee
               </button>
             </form>
-            {error && <p className="status-error">{error}</p>}
           </section>
 
+          {enrollmentSession && (
+            <EnrollmentCapture
+              session={enrollmentSession}
+              onCancel={() => setEnrollmentSession(null)}
+              onComplete={handleEnrollmentComplete}
+            />
+          )}
+
           <section className="card">
-            <h2>Registered employees</h2>
+            <div className="form-row">
+              <h2>Registered employees</h2>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={includeInactive}
+                  onChange={(event) => setIncludeInactive(event.target.checked)}
+                />
+                Show inactive
+              </label>
+            </div>
+
             {employees.length === 0 ? (
               <p>No employees registered yet.</p>
             ) : (
@@ -268,36 +392,99 @@ export default function Dashboard() {
                     <th>Code</th>
                     <th>Full name</th>
                     <th>Department</th>
-                    <th>Face enrollment</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {employees.map((employee) => (
-                    <tr key={employee.employee_code}>
+                    <tr key={employee.employee_code} className={employee.active === false ? "inactive-row" : ""}>
                       <td>{employee.employee_code}</td>
-                      <td>{employee.full_name}</td>
-                      <td>{employee.department || "—"}</td>
                       <td>
-                        <form
-                          className="enroll-inline-form"
-                          onSubmit={(event) => handleEnrollFace(event, employee.employee_code)}
-                        >
+                        {editingCode === employee.employee_code ? (
                           <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(event) => handleFileSelect(employee.employee_code, event.target.files?.[0])}
+                            aria-label={`Full name for ${employee.employee_code}`}
+                            value={editEmployee.full_name}
+                            onChange={(event) => setEditEmployee({ ...editEmployee, full_name: event.target.value })}
                           />
-                          <button type="submit" className="button button-small">
-                            Enroll
-                          </button>
-                        </form>
+                        ) : (
+                          employee.full_name
+                        )}
+                      </td>
+                      <td>
+                        {editingCode === employee.employee_code ? (
+                          <input
+                            aria-label={`Department for ${employee.employee_code}`}
+                            value={editEmployee.department}
+                            onChange={(event) => setEditEmployee({ ...editEmployee, department: event.target.value })}
+                          />
+                        ) : (
+                          employee.department || "None"
+                        )}
+                      </td>
+                      <td>
+                        <span className={`state-pill ${employee.active === false ? "warn" : "ok"}`}>
+                          {employee.active === false ? "inactive" : "active"}
+                        </span>
+                      </td>
+                      <td>
+                        {editingCode === employee.employee_code ? (
+                          <form className="button-row" onSubmit={(event) => submitEdit(event, employee.employee_code)}>
+                            <button type="submit" className="button button-small">
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="button button-small button-secondary"
+                              onClick={() => setEditingCode("")}
+                            >
+                              Cancel
+                            </button>
+                          </form>
+                        ) : (
+                          <div className="button-row">
+                            {employee.active === false ? (
+                              <button
+                                type="button"
+                                className="button button-small"
+                                onClick={() => restoreEmployee(employee.employee_code)}
+                              >
+                                Restore
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="button button-small"
+                                  onClick={() => createEnrollmentSession(employee)}
+                                >
+                                  Open camera
+                                </button>
+                                <button
+                                  type="button"
+                                  className="button button-small button-secondary"
+                                  onClick={() => startEdit(employee)}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="button button-small button-danger"
+                                  onClick={() => deactivateEmployee(employee.employee_code)}
+                                >
+                                  Deactivate
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
-            {enrollMessage && <p className="status-success">{enrollMessage}</p>}
+            {message && <p className="status-success">{message}</p>}
             {error && <p className="status-error">{error}</p>}
           </section>
         </>

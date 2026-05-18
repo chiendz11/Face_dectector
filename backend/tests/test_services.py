@@ -286,6 +286,17 @@ def test_vector_search_upsert_overwrites_existing_embedding() -> None:
     assert new_result["score"] == 1.0
 
 
+def test_vector_search_delete_removes_embedding() -> None:
+    service = VectorSearchService(match_threshold=0.8, embedding_dimensions=3)
+    service.upsert_face_embedding("emp-025", [1.0, 0.0, 0.0])
+
+    deleted = service.delete_face_embedding("EMP-025")
+    result = service.search_similar_face([1.0, 0.0, 0.0])
+
+    assert deleted is True
+    assert result["match"] is None
+
+
 def test_vector_search_rejects_empty_employee_code() -> None:
     service = VectorSearchService(match_threshold=0.8, embedding_dimensions=3)
 
@@ -322,7 +333,7 @@ def test_employee_registry_returns_none_for_unknown_employee(sqlite_session) -> 
     assert result is None
 
 
-def test_employee_registry_delete_removes_employee(sqlite_session) -> None:
+def test_employee_registry_delete_soft_deletes_employee(sqlite_session) -> None:
     service = EmployeeRegistryService(sqlite_session)
     service.create_employee(
         EmployeeCreate(employee_code="emp-030", full_name="To Be Deleted", department="HR")
@@ -332,8 +343,10 @@ def test_employee_registry_delete_removes_employee(sqlite_session) -> None:
 
     assert deleted is not None
     assert deleted.employee_code == "EMP-030"
+    assert deleted.active is False
     assert service.get_employee("EMP-030") is None
     assert service.list_employees() == []
+    assert service.get_employee("EMP-030", include_inactive=True).active is False
 
 
 def test_employee_registry_rejects_blank_employee_code(sqlite_session) -> None:

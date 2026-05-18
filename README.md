@@ -12,10 +12,12 @@ edge devices near the cameras.
   user-facing interface for the security guard or employee.
 - `backend/`: FastAPI APIs, business logic, recognition pipeline, and service
   integration for SQL, object storage, vector search, and background jobs.
-- `frontend-admin/`: admin panel for employee enrollment, threshold tuning,
-  role management, and audit review. It is served at `/admin/`.
-- `enrollment-station/`: controlled live-camera enrollment app for capturing
-  multi-sample employee face templates. It is served at `/enroll/`.
+- `frontend-admin/`: admin panel for employee management, token-bound
+  live-camera face enrollment, threshold tuning, role management, and audit
+  review. It is served at `/admin/`.
+- `enrollment-station/`: compatibility live-camera enrollment surface. The
+  primary enrollment flow now starts in `frontend-admin/` and uses short-lived
+  enrollment session tokens.
 - `nginx/`: reverse proxy that exposes `/admin/` and `/api/`.
 - `docker-compose.yml`: base stack contract shared by all environments.
 - `docker-compose.dev.yml`: local development override (builds images and brings db, redis, minio).
@@ -57,8 +59,8 @@ For AWS staging and production, the practical target is different:
 ### Server side
 
 - `nginx` listens on port `80`
-- `/admin/` routes to `frontend-admin`
-- `/enroll/` routes to `enrollment-station`
+- `/admin/` routes to `frontend-admin`, including `#/enroll/session/{token}`
+- `/enroll/` routes to the compatibility enrollment station surface
 - `/api/` routes to `backend`
 - `backend` talks to external PostgreSQL, external Redis or Valkey, and S3
 - `worker` consumes async jobs from external Redis or Valkey and can scale independently from the API
@@ -109,8 +111,8 @@ project-root/
 
 ## URL Layout
 
-- `http://your-server-domain/admin/`: admin frontend
-- `http://your-server-domain/enroll/`: controlled enrollment station frontend
+- `http://your-server-domain/admin/`: admin frontend and token-bound enrollment module
+- `http://your-server-domain/enroll/`: compatibility enrollment station frontend
 - `http://your-server-domain/api/health`: backend health
 - `edge-client`: entrance kiosk flow
 

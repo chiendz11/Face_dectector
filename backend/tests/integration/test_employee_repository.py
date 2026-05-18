@@ -185,25 +185,28 @@ class TestDeleteEmployee:
         assert deleted is not None
         assert deleted.employee_code == "EMP020"
 
-    def test_delete_removes_employee_from_db(self, db_session):
+    def test_delete_soft_deletes_employee_from_active_views(self, db_session):
         svc = _make_service(db_session)
         _create(svc, code="EMP021")
 
         svc.delete_employee("EMP021")
         assert svc.get_employee("EMP021") is None
+        inactive = svc.get_employee("EMP021", include_inactive=True)
+        assert inactive is not None
+        assert inactive.active is False
 
     def test_delete_missing_employee_returns_none(self, db_session):
         svc = _make_service(db_session)
         assert svc.delete_employee("NOBODY") is None
 
-    def test_delete_then_recreate_same_code_succeeds(self, db_session):
+    def test_delete_then_recreate_same_code_is_rejected(self, db_session):
         svc = _make_service(db_session)
         _create(svc, code="EMP022", full_name="Mallory")
 
         svc.delete_employee("EMP022")
-        record = _create(svc, code="EMP022", full_name="Mallory v2")
 
-        assert record.full_name == "Mallory v2"
+        with pytest.raises(ValueError, match="already exists"):
+            _create(svc, code="EMP022", full_name="Mallory v2")
 
     def test_delete_does_not_affect_other_employees(self, db_session):
         svc = _make_service(db_session)
