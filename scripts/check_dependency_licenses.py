@@ -95,6 +95,15 @@ def compile_policy(document: dict[str, Any]) -> dict[str, Any]:
             }
             for rule in document.get("ignorePackages", [])
         ],
+        "review_rules": [
+            {
+                "surface": rule["surface"],
+                "package": rule["package"],
+                "private_only": bool(rule.get("privateOnly", False)),
+                "reason": rule.get("reason", "Review required by package policy."),
+            }
+            for rule in document.get("reviewPackages", [])
+        ],
     }
 
 
@@ -176,6 +185,22 @@ def match_ignore_rule(
     return None
 
 
+def match_review_rule(
+    *,
+    surface: str,
+    package: str,
+    is_private: bool,
+    policy: dict[str, Any],
+) -> str | None:
+    for rule in policy["review_rules"]:
+        if rule["surface"] != surface or rule["package"] != package:
+            continue
+        if rule["private_only"] and not is_private:
+            continue
+        return str(rule["reason"])
+    return None
+
+
 def classify_license_expression(
     expression: str,
     policy: dict[str, Any],
@@ -245,6 +270,24 @@ def evaluate_inventory_document(
                     "status": "ignored",
                     "tokens": split_license_expression(package["license"]),
                     "reason": ignore_reason,
+                }
+            )
+            continue
+
+        review_reason = match_review_rule(
+            surface=surface,
+            package=package["package"],
+            is_private=package["private"],
+            policy=policy,
+        )
+        if review_reason:
+            counts["review"] += 1
+            findings.append(
+                {
+                    **package,
+                    "status": "review",
+                    "tokens": split_license_expression(package["license"]),
+                    "reason": review_reason,
                 }
             )
             continue

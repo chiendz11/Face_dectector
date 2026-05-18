@@ -22,12 +22,15 @@ def build_policy() -> dict[str, object]:
     return compile_policy(
         {
             "allowedLicenses": [
+                "Apache License 2.0",
                 "Apache-2.0",
+                "BSD",
                 "BSD-3-Clause",
                 "MIT",
             ],
             "reviewLicenses": [
                 "CC-BY-4.0",
+                "MPL-2.0",
             ],
             "disallowedLicenses": [
                 "GPL-3.0",
@@ -46,6 +49,13 @@ def build_policy() -> dict[str, object]:
                     "package": "enrollment-station",
                     "privateOnly": True,
                     "reason": "Ignore the private enrollment workspace package.",
+                }
+            ],
+            "reviewPackages": [
+                {
+                    "surface": "backend",
+                    "package": "namex",
+                    "reason": "Keras dependency publishes UNKNOWN license metadata.",
                 }
             ],
         }
@@ -124,6 +134,50 @@ class DependencyLicensePolicyTest(unittest.TestCase):
         )
 
         self.assertEqual(result["counts"], {"allowed": 1, "review": 0, "blocked": 0, "ignored": 0})
+
+    def test_deepface_dependency_license_metadata_is_classified_without_blocking(self) -> None:
+        result = evaluate_inventory_document(
+            surface="backend",
+            kind="pip",
+            document=[
+                {
+                    "Name": "PySocks",
+                    "Version": "1.7.1",
+                    "License": "BSD",
+                },
+                {
+                    "Name": "keras",
+                    "Version": "3.11.3",
+                    "License": "Apache License 2.0",
+                },
+                {
+                    "Name": "namex",
+                    "Version": "0.1.0",
+                    "License": "UNKNOWN",
+                },
+                {
+                    "Name": "tqdm",
+                    "Version": "4.67.3",
+                    "License": "MPL-2.0 AND MIT",
+                },
+            ],
+            policy=build_policy(),
+        )
+
+        self.assertEqual(result["counts"], {"allowed": 2, "review": 2, "blocked": 0, "ignored": 0})
+        review_packages = {
+            finding["package"]: finding["reason"]
+            for finding in result["findings"]
+            if finding["status"] == "review"
+        }
+        self.assertEqual(
+            review_packages["namex"],
+            "Keras dependency publishes UNKNOWN license metadata.",
+        )
+        self.assertEqual(
+            review_packages["tqdm"],
+            "review-required license token(s): MPL-2.0",
+        )
 
     def test_unknown_and_disallowed_licenses_are_blocking(self) -> None:
         blocked = evaluate_inventory_document(
