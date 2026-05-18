@@ -13,7 +13,7 @@ dependencies = [
   "mediapipe==0.10.33",
   "requests==2.33.1",
   "pillow==12.2.0",
-  "fastapi==0.116.1",
+  "fastapi==0.136.1",
   "starlette==0.47.3",
   "uvicorn==0.35.0",
 ]
