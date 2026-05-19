@@ -359,8 +359,7 @@ class GitOpsPromotionContractTest(unittest.TestCase):
         run_script = extract_run_step(workflow, "promote", step_name)
         run_script = run_script.replace('${{ steps.image-digests.outputs.backend_digest }}', 'sha256:' + '1' * 64)
         run_script = run_script.replace('${{ steps.image-digests.outputs.frontend_digest }}', 'sha256:' + '2' * 64)
-        run_script = run_script.replace('${{ steps.image-digests.outputs.enrollment_digest }}', 'sha256:' + '3' * 64)
-        run_script = run_script.replace('${{ steps.image-digests.outputs.nginx_digest }}', 'sha256:' + '4' * 64)
+        run_script = run_script.replace('${{ steps.image-digests.outputs.nginx_digest }}', 'sha256:' + '3' * 64)
         run_script = replace_command(run_script, "python", shell_python_command())
 
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
@@ -414,8 +413,7 @@ class GitOpsPromotionContractTest(unittest.TestCase):
         self.assertEqual(written["backend"]["image"]["digest"], "sha256:" + "1" * 64)
         self.assertEqual(written["worker"]["image"]["digest"], "sha256:" + "1" * 64)
         self.assertEqual(written["frontendAdmin"]["image"]["digest"], "sha256:" + "2" * 64)
-        self.assertEqual(written["enrollmentStation"]["image"]["digest"], "sha256:" + "3" * 64)
-        self.assertEqual(written["nginx"]["image"]["digest"], "sha256:" + "4" * 64)
+        self.assertEqual(written["nginx"]["image"]["digest"], "sha256:" + "3" * 64)
         self.assertEqual(written["featureFlags"], {"demoMode": True})
 
     def test_gitops_production_contract_runs_lock_mutation_in_dry_run(self) -> None:
@@ -433,8 +431,7 @@ class GitOpsPromotionContractTest(unittest.TestCase):
         self.assertEqual(written["backend"]["image"]["digest"], "sha256:" + "1" * 64)
         self.assertEqual(written["worker"]["image"]["digest"], "sha256:" + "1" * 64)
         self.assertEqual(written["frontendAdmin"]["image"]["digest"], "sha256:" + "2" * 64)
-        self.assertEqual(written["enrollmentStation"]["image"]["digest"], "sha256:" + "3" * 64)
-        self.assertEqual(written["nginx"]["image"]["digest"], "sha256:" + "4" * 64)
+        self.assertEqual(written["nginx"]["image"]["digest"], "sha256:" + "3" * 64)
         self.assertEqual(written["featureFlags"], {"demoMode": True})
 
 

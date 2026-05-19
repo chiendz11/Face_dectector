@@ -24,7 +24,6 @@ jobs:
       app_changed: ${{ steps.classify.outputs.app_changed }}
       backend_changed: ${{ steps.classify.outputs.backend_changed }}
       frontend_admin_changed: ${{ steps.classify.outputs.frontend_admin_changed }}
-      enrollment_station_changed: ${{ steps.classify.outputs.enrollment_station_changed }}
       edge_client_changed: ${{ steps.classify.outputs.edge_client_changed }}
       nginx_changed: ${{ steps.classify.outputs.nginx_changed }}
       app_shared_changed: ${{ steps.classify.outputs.app_shared_changed }}
@@ -58,10 +57,9 @@ jobs:
       image_tag: ${{ github.sha }}
       run_backend: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.backend_changed == 'true' }}
       run_frontend_admin: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.frontend_admin_changed == 'true' }}
-      run_enrollment_station: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.enrollment_station_changed == 'true' }}
       run_edge_client: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.edge_client_changed == 'true' }}
       run_nginx: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.nginx_changed == 'true' }}
-      run_app_security: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.backend_changed == 'true' || needs.detect-changes.outputs.frontend_admin_changed == 'true' || needs.detect-changes.outputs.enrollment_station_changed == 'true' || needs.detect-changes.outputs.edge_client_changed == 'true' }}
+      run_app_security: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.backend_changed == 'true' || needs.detect-changes.outputs.frontend_admin_changed == 'true' || needs.detect-changes.outputs.edge_client_changed == 'true' }}
       run_docker_images: ${{ needs.detect-changes.outputs.image_names != '' }}
       run_smoke_e2e: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' }}
       image_names: ${{ needs.detect-changes.outputs.image_names }}
@@ -92,7 +90,6 @@ jobs:
           app_changed="${{ needs.detect-changes.outputs.app_changed }}"
           backend_changed="${{ needs.detect-changes.outputs.backend_changed }}"
           frontend_admin_changed="${{ needs.detect-changes.outputs.frontend_admin_changed }}"
-          enrollment_station_changed="${{ needs.detect-changes.outputs.enrollment_station_changed }}"
           edge_client_changed="${{ needs.detect-changes.outputs.edge_client_changed }}"
           nginx_changed="${{ needs.detect-changes.outputs.nginx_changed }}"
           app_shared_changed="${{ needs.detect-changes.outputs.app_shared_changed }}"
@@ -126,4 +123,4 @@ jobs:
           fi
 
           echo "CI Gateway passed. app_changed=$app_changed, platform_changed=$platform_changed, infra_changed=$infra_changed"
-          echo "App lanes: backend=$backend_changed frontend_admin=$frontend_admin_changed enrollment_station=$enrollment_station_changed edge_client=$edge_client_changed nginx=$nginx_changed shared=$app_shared_changed images=$image_names"
+          echo "App lanes: backend=$backend_changed frontend_admin=$frontend_admin_changed edge_client=$edge_client_changed nginx=$nginx_changed shared=$app_shared_changed images=$image_names"

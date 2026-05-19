@@ -7,7 +7,6 @@ on:
     paths:
       - "backend/**"
       - "frontend-admin/**"
-      - "enrollment-station/**"
       - "edge-client/**"
       - "nginx/**"
       - "docker-compose.yml"

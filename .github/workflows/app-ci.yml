@@ -7,7 +7,6 @@ on:
     paths:
       - "backend/**"
       - "frontend-admin/**"
-      - "enrollment-station/**"
       - "edge-client/**"
       - "nginx/**"
       - "docker-compose.yml"
@@ -45,7 +44,6 @@ jobs:
       app_changed: ${{ steps.classify.outputs.app_changed }}
       backend_changed: ${{ steps.classify.outputs.backend_changed }}
       frontend_admin_changed: ${{ steps.classify.outputs.frontend_admin_changed }}
-      enrollment_station_changed: ${{ steps.classify.outputs.enrollment_station_changed }}
       edge_client_changed: ${{ steps.classify.outputs.edge_client_changed }}
       nginx_changed: ${{ steps.classify.outputs.nginx_changed }}
       app_shared_changed: ${{ steps.classify.outputs.app_shared_changed }}
@@ -77,10 +75,9 @@ jobs:
       image_tag: ${{ github.sha }}
       run_backend: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.backend_changed == 'true' }}
       run_frontend_admin: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.frontend_admin_changed == 'true' }}
-      run_enrollment_station: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.enrollment_station_changed == 'true' }}
       run_edge_client: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.edge_client_changed == 'true' }}
       run_nginx: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.nginx_changed == 'true' }}
-      run_app_security: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.backend_changed == 'true' || needs.detect-changes.outputs.frontend_admin_changed == 'true' || needs.detect-changes.outputs.enrollment_station_changed == 'true' || needs.detect-changes.outputs.edge_client_changed == 'true' }}
+      run_app_security: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' || needs.detect-changes.outputs.backend_changed == 'true' || needs.detect-changes.outputs.frontend_admin_changed == 'true' || needs.detect-changes.outputs.edge_client_changed == 'true' }}
       run_docker_images: ${{ needs.detect-changes.outputs.image_names != '' }}
       run_smoke_e2e: ${{ needs.detect-changes.outputs.app_shared_changed == 'true' }}
       image_names: ${{ needs.detect-changes.outputs.image_names }}

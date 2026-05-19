@@ -20,8 +20,6 @@ spec:
           value: ${BACKEND_IMAGE_REPOSITORY}
         - name: frontendAdmin.image.repository
           value: ${FRONTEND_IMAGE_REPOSITORY}
-        - name: enrollmentStation.image.repository
-          value: ${ENROLLMENT_IMAGE_REPOSITORY}
         - name: nginx.image.repository
           value: ${NGINX_IMAGE_REPOSITORY}
 ${IMAGE_PULL_SECRET_PARAMETER}

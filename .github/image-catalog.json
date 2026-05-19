@@ -12,12 +12,6 @@
         "context": "frontend-admin"
     },
     {
-        "name": "enrollment-station",
-        "repository": "face-detector-enrollment",
-        "dockerfile": "enrollment-station/Dockerfile",
-        "context": "enrollment-station"
-    },
-    {
         "name": "edge-client",
         "repository": "face-detector-edge",
         "dockerfile": "edge-client/Dockerfile",

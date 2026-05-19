@@ -8,7 +8,7 @@ Script `qa-local-compose.ps1` mặc định dùng 2 file:
 - `docker-compose.dev.yml`
 
 Nghĩa là chạy stack local chuẩn (backend, worker, frontend-admin,
-enrollment-station, nginx, db, redis, minio...), chưa có edge-client.
+nginx, db, redis, minio...), chưa có edge-client.
 
 ## 2) Khi nào edge-client được chạy?
 
@@ -229,10 +229,10 @@ Admin UI:
 Invoke-WebRequest http://localhost/admin/
 ```
 
-Enrollment station UI:
+Enrollment compatibility redirect:
 
 ```powershell
-Invoke-WebRequest http://localhost/enroll/
+Invoke-WebRequest http://localhost/admin/
 ```
 
 ## 6) Troubleshooting khi `-Action qa` bị timeout
@@ -300,17 +300,17 @@ Mở admin UI:
 http://localhost/admin/
 ```
 
-Mở enrollment station UI:
+Mở admin enrollment session UI:
 
 ```text
-http://localhost/enroll/
+http://localhost/admin/
 ```
 
-Lưu ý production: enrollment station phải chạy qua HTTPS để browser cho phép
+Lưu ý production: admin enrollment session phải chạy qua HTTPS để browser cho phép
 truy cập camera. `localhost` chỉ là ngoại lệ cho dev/test local.
 
 Login bằng user/password trong `.env`, tạo employee ở admin UI, rồi dùng
-enrollment station để chụp 3-5 mẫu mặt live cho employee đó.
+admin enrollment session để chụp 3-5 mẫu mặt live cho employee đó.
 
 Kiểm tra vector đã được ghi:
 

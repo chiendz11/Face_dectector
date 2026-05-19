@@ -18,10 +18,6 @@ http {
     server frontend-admin:8080;
   }
 
-  upstream enrollment_upstream {
-    server enrollment-station:8080;
-  }
-
   server {
     listen 8080;
     server_name _;
@@ -65,16 +61,11 @@ http {
     }
 
     location = /enroll {
-      return 302 /enroll/;
+      return 302 /admin/;
     }
 
     location /enroll/ {
-      proxy_pass http://enrollment_upstream/;
-      proxy_http_version 1.1;
-      proxy_set_header Host $host;
-      proxy_set_header X-Real-IP $remote_addr;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
+      return 302 /admin/;
     }
   }
 }

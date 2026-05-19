@@ -33,7 +33,6 @@ HEAVY_REASON_PATTERNS = {
         "docker-compose.edge.yml",
         "docker-compose.yml",
         "edge-client/Dockerfile",
-        "enrollment-station/Dockerfile",
         "frontend-admin/Dockerfile",
         "nginx/Dockerfile",
         "scripts/ci-e2e-test.sh",
@@ -52,7 +51,6 @@ HEAVY_REASON_PATTERNS = {
 }
 SERVICE_SURFACE_PATTERNS = {
     "backend": ["backend/**"],
-    "enrollment-station": ["enrollment-station/**"],
     "frontend-admin": ["frontend-admin/**"],
     "edge-client": ["edge-client/**"],
     "nginx": ["nginx/**"],

@@ -25,10 +25,6 @@ on:
         required: false
         type: boolean
         default: true
-      run_enrollment_station:
-        required: false
-        type: boolean
-        default: true
       run_edge_client:
         required: false
         type: boolean
@@ -52,7 +48,7 @@ on:
       image_names:
         required: false
         type: string
-        default: backend,frontend-admin,enrollment-station,edge-client,nginx
+        default: backend,frontend-admin,edge-client,nginx
 
 permissions:
   contents: read
@@ -155,7 +151,7 @@ jobs:
           retention-days: 30
 
       - name: Set up Node.js
-        if: ${{ inputs.run_frontend_admin || inputs.run_enrollment_station }}
+        if: ${{ inputs.run_frontend_admin }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "22"
@@ -170,18 +166,6 @@ jobs:
         if: ${{ inputs.run_frontend_admin }}
         run: |
           cd frontend-admin
-          npm audit --audit-level=high
-
-      - name: Install enrollment station dependencies for audit
-        if: ${{ inputs.run_enrollment_station }}
-        run: |
-          cd enrollment-station
-          npm ci
-
-      - name: Run enrollment station dependency audit
-        if: ${{ inputs.run_enrollment_station }}
-        run: |
-          cd enrollment-station
           npm audit --audit-level=high
 
       - name: Generate backend dependency license inventory
@@ -207,15 +191,8 @@ jobs:
           cd frontend-admin
           npx --yes license-checker-rseidelsohn@4.4.2 --json > ../.artifacts/licenses/frontend-admin.json
 
-      - name: Generate enrollment station dependency license inventory
-        if: ${{ inputs.run_enrollment_station }}
-        run: |
-          mkdir -p .artifacts/licenses
-          cd enrollment-station
-          npx --yes license-checker-rseidelsohn@4.4.2 --json > ../.artifacts/licenses/enrollment-station.json
-
       - name: Evaluate dependency license policy
-        if: ${{ inputs.run_backend || inputs.run_edge_client || inputs.run_frontend_admin || inputs.run_enrollment_station }}
+        if: ${{ inputs.run_backend || inputs.run_edge_client || inputs.run_frontend_admin }}
         run: |
           inventory_args=()
           if [ -f .artifacts/licenses/backend.json ]; then
@@ -226,9 +203,6 @@ jobs:
           fi
           if [ -f .artifacts/licenses/frontend-admin.json ]; then
             inventory_args+=(--inventory frontend-admin:node:.artifacts/licenses/frontend-admin.json)
-          fi
-          if [ -f .artifacts/licenses/enrollment-station.json ]; then
-            inventory_args+=(--inventory enrollment-station:node:.artifacts/licenses/enrollment-station.json)
           fi
           python scripts/check_dependency_licenses.py \
             --policy policies/licenses/policy.json \
@@ -341,35 +315,6 @@ jobs:
         run: npm test
 
       - name: Build frontend admin
-        run: npm run build
-
-  enrollment-station-build:
-    if: ${{ inputs.run_enrollment_station }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: enrollment-station
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: "22"
-          cache: "npm"
-          cache-dependency-path: "enrollment-station/package-lock.json"
-
-      - name: Install enrollment station dependencies
-        run: npm ci
-
-      - name: Run enrollment station tests
-        run: npm test
-
-      - name: Build enrollment station
         run: npm run build
 
   edge-client-tests:
@@ -568,7 +513,6 @@ jobs:
       - backend-integration-tests
       - docker-image-verify
       - frontend-admin-build
-      - enrollment-station-build
       - edge-client-tests
     permissions:
       actions: read

@@ -17,17 +17,11 @@ services:
     expose:
       - "8080"
 
-  enrollment-station:
-    restart: unless-stopped
-    expose:
-      - "8080"
-
   nginx:
     restart: unless-stopped
     depends_on:
       - backend
       - frontend-admin
-      - enrollment-station
     environment:
       NGINX_RATE_LIMIT_ENABLED: ${NGINX_RATE_LIMIT_ENABLED:-true}
       NGINX_RATE_LIMIT_ZONE_RATE: ${NGINX_RATE_LIMIT_ZONE_RATE:-5r/s}

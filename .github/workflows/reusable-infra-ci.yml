@@ -64,14 +64,12 @@ jobs:
             --set backend.image.repository=ghcr.io/example/face-detector-backend \
             --set worker.image.repository=ghcr.io/example/face-detector-backend \
             --set frontendAdmin.image.repository=ghcr.io/example/face-detector-admin \
-            --set enrollmentStation.image.repository=ghcr.io/example/face-detector-enrollment \
             --set nginx.image.repository=ghcr.io/example/face-detector-nginx \
             -f deploy/helm/face-detector/values-staging.yaml > .artifacts/helm/staging.yaml
           helm template face-detector deploy/helm/face-detector \
             --set backend.image.repository=ghcr.io/example/face-detector-backend \
             --set worker.image.repository=ghcr.io/example/face-detector-backend \
             --set frontendAdmin.image.repository=ghcr.io/example/face-detector-admin \
-            --set enrollmentStation.image.repository=ghcr.io/example/face-detector-enrollment \
             --set nginx.image.repository=ghcr.io/example/face-detector-nginx \
             -f deploy/helm/face-detector/values-production.yaml > .artifacts/helm/production.yaml
 

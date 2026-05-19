@@ -63,12 +63,10 @@ jobs:
           OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
           BACKEND_DIGEST=$(python scripts/resolve_registry_digest.py --repository "${OWNER}/face-detector-backend" --reference "$IMAGE_TAG" --username "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD")
           FRONTEND_DIGEST=$(python scripts/resolve_registry_digest.py --repository "${OWNER}/face-detector-admin" --reference "$IMAGE_TAG" --username "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD")
-          ENROLLMENT_DIGEST=$(python scripts/resolve_registry_digest.py --repository "${OWNER}/face-detector-enrollment" --reference "$IMAGE_TAG" --username "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD")
           NGINX_DIGEST=$(python scripts/resolve_registry_digest.py --repository "${OWNER}/face-detector-nginx" --reference "$IMAGE_TAG" --username "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD")
           {
             echo "backend_digest=$BACKEND_DIGEST"
             echo "frontend_digest=$FRONTEND_DIGEST"
-            echo "enrollment_digest=$ENROLLMENT_DIGEST"
             echo "nginx_digest=$NGINX_DIGEST"
           } >> "$GITHUB_OUTPUT"
 
@@ -82,7 +80,6 @@ jobs:
             --image-tag "$IMAGE_TAG" \
             --backend-digest "${{ steps.image-digests.outputs.backend_digest }}" \
             --frontend-digest "${{ steps.image-digests.outputs.frontend_digest }}" \
-            --enrollment-digest "${{ steps.image-digests.outputs.enrollment_digest }}" \
             --nginx-digest "${{ steps.image-digests.outputs.nginx_digest }}"
 
       - name: Commit staging promotion

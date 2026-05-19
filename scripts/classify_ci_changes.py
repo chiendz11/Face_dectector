@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-IMAGE_ORDER = ("backend", "frontend-admin", "enrollment-station", "edge-client", "nginx")
+IMAGE_ORDER = ("backend", "frontend-admin", "edge-client", "nginx")
 
 APP_SHARED_EXACT = {
     ".env.example",
@@ -72,7 +72,6 @@ INFRA_PREFIXES = (
 class CiChangeClassification:
     backend_changed: bool = False
     frontend_admin_changed: bool = False
-    enrollment_station_changed: bool = False
     edge_client_changed: bool = False
     nginx_changed: bool = False
     app_shared_changed: bool = False
@@ -85,7 +84,6 @@ class CiChangeClassification:
             (
                 self.backend_changed,
                 self.frontend_admin_changed,
-                self.enrollment_station_changed,
                 self.edge_client_changed,
                 self.nginx_changed,
                 self.app_shared_changed,
@@ -102,8 +100,6 @@ class CiChangeClassification:
             selected.append("backend")
         if self.frontend_admin_changed:
             selected.append("frontend-admin")
-        if self.enrollment_station_changed:
-            selected.append("enrollment-station")
         if self.edge_client_changed:
             selected.append("edge-client")
         if self.nginx_changed:
@@ -115,7 +111,6 @@ class CiChangeClassification:
         return {
             "backend_changed": _bool_output(self.backend_changed),
             "frontend_admin_changed": _bool_output(self.frontend_admin_changed),
-            "enrollment_station_changed": _bool_output(self.enrollment_station_changed),
             "edge_client_changed": _bool_output(self.edge_client_changed),
             "nginx_changed": _bool_output(self.nginx_changed),
             "app_shared_changed": _bool_output(self.app_shared_changed),
@@ -129,7 +124,6 @@ class CiChangeClassification:
 def classify_paths(paths: list[str]) -> CiChangeClassification:
     backend_changed = False
     frontend_admin_changed = False
-    enrollment_station_changed = False
     edge_client_changed = False
     nginx_changed = False
     app_shared_changed = False
@@ -145,8 +139,6 @@ def classify_paths(paths: list[str]) -> CiChangeClassification:
             backend_changed = True
         elif path.startswith("frontend-admin/"):
             frontend_admin_changed = True
-        elif path.startswith("enrollment-station/"):
-            enrollment_station_changed = True
         elif path.startswith("edge-client/"):
             edge_client_changed = True
         elif path.startswith("nginx/"):
@@ -164,7 +156,6 @@ def classify_paths(paths: list[str]) -> CiChangeClassification:
     return CiChangeClassification(
         backend_changed=backend_changed,
         frontend_admin_changed=frontend_admin_changed,
-        enrollment_station_changed=enrollment_station_changed,
         edge_client_changed=edge_client_changed,
         nginx_changed=nginx_changed,
         app_shared_changed=app_shared_changed,

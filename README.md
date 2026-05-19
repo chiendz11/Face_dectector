@@ -14,10 +14,8 @@ edge devices near the cameras.
   integration for SQL, object storage, vector search, and background jobs.
 - `frontend-admin/`: admin panel for employee management, token-bound
   live-camera face enrollment, threshold tuning, role management, and audit
-  review. It is served at `/admin/`.
-- `enrollment-station/`: compatibility live-camera enrollment surface. The
-  primary enrollment flow now starts in `frontend-admin/` and uses short-lived
-  enrollment session tokens.
+  review. It is served at `/admin/`; enrollment capture is a module inside this
+  app and uses short-lived enrollment session tokens.
 - `nginx/`: reverse proxy that exposes `/admin/` and `/api/`.
 - `docker-compose.yml`: base stack contract shared by all environments.
 - `docker-compose.dev.yml`: local development override (builds images and brings db, redis, minio).
@@ -60,7 +58,7 @@ For AWS staging and production, the practical target is different:
 
 - `nginx` listens on port `80`
 - `/admin/` routes to `frontend-admin`, including `#/enroll/session/{token}`
-- `/enroll/` routes to the compatibility enrollment station surface
+- `/enroll/` redirects to `/admin/` for compatibility
 - `/api/` routes to `backend`
 - `backend` talks to external PostgreSQL, external Redis or Valkey, and S3
 - `worker` consumes async jobs from external Redis or Valkey and can scale independently from the API
@@ -93,7 +91,6 @@ project-root/
 |       `-- infrastructure.yml
 |-- backend/
 |-- frontend-admin/
-|-- enrollment-station/
 |-- edge-client/
 |-- nginx/
 |-- docker-compose.yml
@@ -112,7 +109,7 @@ project-root/
 ## URL Layout
 
 - `http://your-server-domain/admin/`: admin frontend and token-bound enrollment module
-- `http://your-server-domain/enroll/`: compatibility enrollment station frontend
+- `http://your-server-domain/enroll/`: compatibility redirect to the admin frontend
 - `http://your-server-domain/api/health`: backend health
 - `edge-client`: entrance kiosk flow
 
@@ -136,7 +133,6 @@ This starts:
 - `backend`
 - `worker`
 - `frontend-admin`
-- `enrollment-station`
 - `nginx`
 - `db`
 - `minio`

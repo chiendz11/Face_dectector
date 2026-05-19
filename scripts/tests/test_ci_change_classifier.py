@@ -8,23 +8,9 @@ def test_edge_client_change_selects_only_edge_lane_and_image() -> None:
     assert result.edge_client_changed is True
     assert result.backend_changed is False
     assert result.frontend_admin_changed is False
-    assert result.enrollment_station_changed is False
     assert result.nginx_changed is False
     assert result.app_shared_changed is False
     assert result.image_names == "edge-client"
-
-
-def test_enrollment_station_change_selects_only_enrollment_lane_and_image() -> None:
-    result = classify_paths(["enrollment-station/src/App.jsx"])
-
-    assert result.app_changed is True
-    assert result.enrollment_station_changed is True
-    assert result.backend_changed is False
-    assert result.frontend_admin_changed is False
-    assert result.edge_client_changed is False
-    assert result.nginx_changed is False
-    assert result.app_shared_changed is False
-    assert result.image_names == "enrollment-station"
 
 
 def test_shared_app_change_selects_all_images() -> None:
@@ -32,7 +18,7 @@ def test_shared_app_change_selects_all_images() -> None:
 
     assert result.app_changed is True
     assert result.app_shared_changed is True
-    assert result.image_names == "backend,frontend-admin,enrollment-station,edge-client,nginx"
+    assert result.image_names == "backend,frontend-admin,edge-client,nginx"
 
 
 def test_compose_override_change_selects_all_images() -> None:
@@ -40,7 +26,7 @@ def test_compose_override_change_selects_all_images() -> None:
 
     assert result.app_changed is True
     assert result.app_shared_changed is True
-    assert result.image_names == "backend,frontend-admin,enrollment-station,edge-client,nginx"
+    assert result.image_names == "backend,frontend-admin,edge-client,nginx"
 
 
 def test_app_workflow_change_is_app_shared_and_platform() -> None:
@@ -49,7 +35,7 @@ def test_app_workflow_change_is_app_shared_and_platform() -> None:
     assert result.app_changed is True
     assert result.app_shared_changed is True
     assert result.platform_changed is True
-    assert result.image_names == "backend,frontend-admin,enrollment-station,edge-client,nginx"
+    assert result.image_names == "backend,frontend-admin,edge-client,nginx"
 
 
 def test_ci_classifier_change_is_app_shared_and_platform() -> None:
@@ -58,7 +44,7 @@ def test_ci_classifier_change_is_app_shared_and_platform() -> None:
     assert result.app_changed is True
     assert result.app_shared_changed is True
     assert result.platform_changed is True
-    assert result.image_names == "backend,frontend-admin,enrollment-station,edge-client,nginx"
+    assert result.image_names == "backend,frontend-admin,edge-client,nginx"
 
 
 def test_infra_change_selects_infra_lane_only() -> None:

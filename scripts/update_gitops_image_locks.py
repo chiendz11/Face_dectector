@@ -13,7 +13,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image-tag", required=True)
     parser.add_argument("--backend-digest", required=True)
     parser.add_argument("--frontend-digest", required=True)
-    parser.add_argument("--enrollment-digest", required=True)
     parser.add_argument("--nginx-digest", required=True)
     return parser.parse_args()
 
@@ -23,7 +22,6 @@ def apply_image_locks(
     image_tag: str,
     backend_digest: str,
     frontend_digest: str,
-    enrollment_digest: str,
     nginx_digest: str,
 ) -> dict[str, Any]:
     values = data or {}
@@ -31,7 +29,6 @@ def apply_image_locks(
         "backend": backend_digest,
         "worker": backend_digest,
         "frontendAdmin": frontend_digest,
-        "enrollmentStation": enrollment_digest,
         "nginx": nginx_digest,
     }
 
@@ -48,7 +45,6 @@ def update_values_file(
     image_tag: str,
     backend_digest: str,
     frontend_digest: str,
-    enrollment_digest: str,
     nginx_digest: str,
 ) -> dict[str, Any]:
     path = Path(values_file)
@@ -58,7 +54,6 @@ def update_values_file(
         image_tag=image_tag,
         backend_digest=backend_digest,
         frontend_digest=frontend_digest,
-        enrollment_digest=enrollment_digest,
         nginx_digest=nginx_digest,
     )
     path.write_text(yaml.safe_dump(updated, sort_keys=False), encoding="utf-8")
@@ -72,7 +67,6 @@ def main() -> int:
         image_tag=args.image_tag,
         backend_digest=args.backend_digest,
         frontend_digest=args.frontend_digest,
-        enrollment_digest=args.enrollment_digest,
         nginx_digest=args.nginx_digest,
     )
     return 0

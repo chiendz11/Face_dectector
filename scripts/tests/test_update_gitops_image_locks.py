@@ -15,7 +15,6 @@ class ApplyImageLocksTest(unittest.TestCase):
             "backend": {"image": {"tag": "old", "digest": "sha256:" + "0" * 64}},
             "worker": {"replicas": 2},
             "frontendAdmin": {"image": {"repository": "ghcr.io/example/admin"}},
-            "enrollmentStation": {"image": {"repository": "ghcr.io/example/enrollment"}},
             "nginx": {},
             "featureFlags": {"demoMode": True},
         }
@@ -25,8 +24,7 @@ class ApplyImageLocksTest(unittest.TestCase):
             image_tag="commit-sha",
             backend_digest="sha256:" + "1" * 64,
             frontend_digest="sha256:" + "2" * 64,
-            enrollment_digest="sha256:" + "3" * 64,
-            nginx_digest="sha256:" + "4" * 64,
+            nginx_digest="sha256:" + "3" * 64,
         )
 
         self.assertEqual(updated["backend"]["image"]["tag"], "commit-sha")
@@ -35,10 +33,8 @@ class ApplyImageLocksTest(unittest.TestCase):
         self.assertEqual(updated["worker"]["image"]["digest"], "sha256:" + "1" * 64)
         self.assertEqual(updated["frontendAdmin"]["image"]["tag"], "commit-sha")
         self.assertEqual(updated["frontendAdmin"]["image"]["digest"], "sha256:" + "2" * 64)
-        self.assertEqual(updated["enrollmentStation"]["image"]["tag"], "commit-sha")
-        self.assertEqual(updated["enrollmentStation"]["image"]["digest"], "sha256:" + "3" * 64)
         self.assertEqual(updated["nginx"]["image"]["tag"], "commit-sha")
-        self.assertEqual(updated["nginx"]["image"]["digest"], "sha256:" + "4" * 64)
+        self.assertEqual(updated["nginx"]["image"]["digest"], "sha256:" + "3" * 64)
         self.assertEqual(updated["featureFlags"], {"demoMode": True})
 
 
@@ -53,8 +49,7 @@ class UpdateValuesFileTest(unittest.TestCase):
                 image_tag="release-sha",
                 backend_digest="sha256:" + "a" * 64,
                 frontend_digest="sha256:" + "b" * 64,
-                enrollment_digest="sha256:" + "c" * 64,
-                nginx_digest="sha256:" + "d" * 64,
+                nginx_digest="sha256:" + "c" * 64,
             )
 
             written = yaml.safe_load(values_path.read_text(encoding="utf-8"))
@@ -64,8 +59,7 @@ class UpdateValuesFileTest(unittest.TestCase):
         self.assertEqual(written["backend"]["image"]["digest"], "sha256:" + "a" * 64)
         self.assertEqual(written["worker"]["image"]["digest"], "sha256:" + "a" * 64)
         self.assertEqual(written["frontendAdmin"]["image"]["digest"], "sha256:" + "b" * 64)
-        self.assertEqual(written["enrollmentStation"]["image"]["digest"], "sha256:" + "c" * 64)
-        self.assertEqual(written["nginx"]["image"]["digest"], "sha256:" + "d" * 64)
+        self.assertEqual(written["nginx"]["image"]["digest"], "sha256:" + "c" * 64)
 
 
 if __name__ == "__main__":
