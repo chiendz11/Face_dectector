@@ -1,5 +1,5 @@
 import Dashboard from "./pages/Dashboard";
-import EnrollmentSessionPage from "./pages/EnrollmentSessionPage";
+import EnrollmentSessionPage from "./features/enrollment/EnrollmentSessionPage";
 
 function getEnrollmentSessionToken() {
   const match = window.location.hash.match(/^#\/enroll\/session\/([^/?#]+)/);

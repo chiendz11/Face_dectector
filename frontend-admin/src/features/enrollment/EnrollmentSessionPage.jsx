@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import EnrollmentCapture from "../components/EnrollmentCapture";
+import EnrollmentCapture from "./EnrollmentCapture";
+import { getEnrollmentSession } from "./enrollmentApi";
 
 export default function EnrollmentSessionPage({ token }) {
   const [session, setSession] = useState(null);
@@ -14,8 +15,7 @@ export default function EnrollmentSessionPage({ token }) {
     setStatus("loading");
     setError("");
     try {
-      const response = await fetch(`/api/admin/enrollment-sessions/${encodeURIComponent(token)}`);
-      const payload = await response.json();
+      const { response, payload } = await getEnrollmentSession({ token });
       if (!response.ok) {
         throw new Error(payload.detail || "Enrollment session unavailable.");
       }

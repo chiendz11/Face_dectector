@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { completeEnrollmentSession } from "./enrollmentApi";
 
 const TARGET_SAMPLE_COUNT = 5;
 const MIN_SAMPLE_COUNT = 3;
@@ -110,11 +111,7 @@ export default function EnrollmentCapture({ session, onCancel, onComplete }) {
     });
 
     try {
-      const response = await fetch(`/api/admin/enrollment-sessions/${encodeURIComponent(session.token)}/complete`, {
-        method: "POST",
-        body: formData,
-      });
-      const payload = await response.json();
+      const { response, payload } = await completeEnrollmentSession({ token: session.token, formData });
       if (!response.ok) {
         throw new Error(payload.detail || "Enrollment failed.");
       }
