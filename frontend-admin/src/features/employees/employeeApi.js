@@ -1,5 +1,15 @@
-export async function listEmployees({ includeInactive, authHeaders }) {
-  const suffix = includeInactive ? "?include_inactive=true" : "";
+export async function listEmployees({ includeInactive, query = "", limit, authHeaders }) {
+  const params = new URLSearchParams();
+  if (includeInactive) {
+    params.set("include_inactive", "true");
+  }
+  if (query.trim()) {
+    params.set("query", query.trim());
+  }
+  if (limit) {
+    params.set("limit", String(limit));
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
   const response = await fetch(`/api/admin/employees${suffix}`, {
     method: "GET",
     headers: authHeaders,

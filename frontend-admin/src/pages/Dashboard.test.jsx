@@ -275,7 +275,7 @@ describe("Dashboard enrollment sessions and employee lifecycle", () => {
   function makeEmployeeFetchMock(extraHandler) {
     return vi.fn(async (url, opts) => {
       if (url === "/api/auth/login") return { ok: true, status: 200, json: async () => AUTH_RESPONSE };
-      if (url === "/api/admin/employees" && (!opts?.method || opts.method === "GET")) {
+      if (url.startsWith("/api/admin/employees") && (!opts?.method || opts.method === "GET")) {
         return {
           ok: true,
           status: 200,
@@ -328,6 +328,11 @@ describe("Dashboard enrollment sessions and employee lifecycle", () => {
     await waitFor(() => screen.getByText("EMP-100"));
     fireEvent.click(screen.getByRole("button", { name: /enroll face/i }));
 
+    await waitFor(() => expect(screen.getByRole("heading", { name: /face enrollment/i })).toBeInTheDocument());
+    const searchResult = await screen.findByRole("button", { name: /nguyen van a/i });
+    fireEvent.click(searchResult);
+    fireEvent.click(screen.getByRole("button", { name: /scan face/i }));
+
     await waitFor(() => screen.getByLabelText(/enrollment camera preview/i));
     expect(capturedHeaders.Authorization).toBe(`Bearer ${TOKEN}`);
   });
@@ -371,12 +376,15 @@ describe("Dashboard enrollment sessions and employee lifecycle", () => {
 
     await waitFor(() => screen.getByText("EMP-100"));
     fireEvent.click(screen.getByRole("button", { name: /enroll face/i }));
+    const searchResult = await screen.findByRole("button", { name: /nguyen van a/i });
+    fireEvent.click(searchResult);
+    fireEvent.click(screen.getByRole("button", { name: /scan face/i }));
     const captureButton = await screen.findByRole("button", { name: /capture/i });
     await waitFor(() => expect(captureButton).not.toBeDisabled());
     fireEvent.click(captureButton);
     fireEvent.click(captureButton);
     fireEvent.click(captureButton);
-    const completeButton = screen.getByRole("button", { name: /complete enrollment/i });
+    const completeButton = screen.getByRole("button", { name: /save enrollment/i });
     await waitFor(() => expect(completeButton).not.toBeDisabled());
     fireEvent.click(completeButton);
 

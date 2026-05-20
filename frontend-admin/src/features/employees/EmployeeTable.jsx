@@ -6,11 +6,11 @@ export default function EmployeeTable({
   error,
   includeInactive,
   message,
-  onCreateEnrollmentSession,
   onDeactivate,
   onEditChange,
   onEditStart,
   onEditCancel,
+  onOpenEnrollment,
   onIncludeInactiveChange,
   onRestore,
   onSubmitEdit,
@@ -107,7 +107,7 @@ export default function EmployeeTable({
                           <button
                             type="button"
                             className="button button-small"
-                            onClick={() => onCreateEnrollmentSession(employee)}
+                            onClick={() => onOpenEnrollment(employee)}
                           >
                             Enroll face
                           </button>

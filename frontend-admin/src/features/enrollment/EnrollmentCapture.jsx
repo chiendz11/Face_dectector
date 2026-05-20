@@ -172,7 +172,7 @@ export default function EnrollmentCapture({ session, onCancel, onComplete }) {
             </button>
           </div>
           <button type="submit" className="button" disabled={!canSubmit}>
-            Complete enrollment
+            Save enrollment
           </button>
 
           <div className="sample-grid" aria-label="Captured samples">

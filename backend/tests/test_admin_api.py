@@ -657,3 +657,23 @@ def test_admin_list_employees_returns_multiple_employees_in_sorted_order(sqlite_
     assert payload["total"] == 3
     codes = [e["employee_code"] for e in payload["items"]]
     assert codes == sorted(codes)
+
+
+def test_admin_list_employees_supports_lazy_search(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    service = EmployeeRegistryService(sqlite_session)
+    service.create_employee(EmployeeCreate(employee_code="emp-301", full_name="Nguyen Van A", department="AI Lab"))
+    service.create_employee(EmployeeCreate(employee_code="emp-302", full_name="Tran Van B", department="Security"))
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: service
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    response = client.get("/api/admin/employees?query=nguyen&limit=10")
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["employee_code"] == "EMP-301"

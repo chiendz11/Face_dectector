@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 import secrets
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.db_models import Department, Employee, FaceEmbedding
@@ -11,12 +12,32 @@ class EmployeeRegistryService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def list_employees(self, include_inactive: bool = False) -> list[EmployeeRecord]:
-        query = self.db.query(Employee)
+    def list_employees(
+        self,
+        include_inactive: bool = False,
+        query: str | None = None,
+        limit: int | None = None,
+    ) -> list[EmployeeRecord]:
+        employee_query = self.db.query(Employee)
         if not include_inactive:
-            query = query.filter(Employee.active.is_(True))
+            employee_query = employee_query.filter(Employee.active.is_(True))
 
-        employees = query.order_by(Employee.employee_code).all()
+        normalized_query = self._normalize_search_query(query)
+        if normalized_query:
+            pattern = f"%{normalized_query}%"
+            employee_query = employee_query.filter(
+                or_(
+                    Employee.employee_code.ilike(pattern),
+                    Employee.full_name.ilike(pattern),
+                    Employee.department.ilike(pattern),
+                )
+            )
+
+        employee_query = employee_query.order_by(Employee.employee_code)
+        if limit is not None:
+            employee_query = employee_query.limit(limit)
+
+        employees = employee_query.all()
         return [self._to_record(item) for item in employees]
 
     def get_employee(self, employee_code: str, include_inactive: bool = False) -> EmployeeRecord | None:
@@ -153,6 +174,12 @@ class EmployeeRegistryService:
             raise ValueError("employee_code must not be empty")
 
         return normalized_code
+
+    @staticmethod
+    def _normalize_search_query(query: str | None) -> str:
+        if query is None:
+            return ""
+        return " ".join(query.strip().split())
 
     def _generate_employee_code(self) -> str:
         for _ in range(10):

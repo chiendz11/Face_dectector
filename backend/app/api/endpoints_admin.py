@@ -121,11 +121,17 @@ def restore_department(
 @router.get("/employees", response_model=EmployeeListResponse)
 def list_employees(
     include_inactive: bool = Query(default=False),
+    query: str | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=50),
     current_user: str = Depends(get_current_user),
     employee_registry: EmployeeRegistryService = Depends(get_employee_registry_service),
 ) -> EmployeeListResponse:
     _ = current_user
-    employees = employee_registry.list_employees(include_inactive=include_inactive)
+    employees = employee_registry.list_employees(
+        include_inactive=include_inactive,
+        query=query,
+        limit=limit,
+    )
     return EmployeeListResponse(items=employees, total=len(employees))
 
 
