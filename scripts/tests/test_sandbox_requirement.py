@@ -6,20 +6,6 @@ import yaml
 from scripts.evaluate_sandbox_requirement import evaluate_policy, main
 
 
-class SandboxRequirementPolicyTest(unittest.TestCase):
-
-    def test_heavy_lane_with_codeowners_approval_passes(self) -> None:
-        report = evaluate_policy(
-            make_event(),
-            [".github/workflows/reusable-app-ci.yml"],
-            approval_count=1,
-        )
-        self.assertEqual(report["classification"], "heavy")
-        self.assertEqual(report["decision"], "pass")
-        self.assertFalse(report["shouldFail"])
-
-
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -98,7 +84,10 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         )
 
         self.assertEqual(report["classification"], "heavy")
-        self.assertEqual(report["decision"], "fail")
+        self.assertEqual(report["decision"], "pass")
+        self.assertTrue(report["sandboxRecommended"])
+        self.assertFalse(report["sandboxRequired"])
+        self.assertFalse(report["block"])
         self.assertTrue(
             any("Cross-service change touches multiple application surfaces" in group["reason"] for group in report["reasonGroups"])
         )
@@ -106,20 +95,22 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
     def test_heavy_pr_with_label_passes(self) -> None:
         report = evaluate_policy(
             make_event(labels=["deploy-sandbox"]),
-            ["deploy/helm/face-detector/templates/nginx.yaml"],
+            ["backend/app/main.py", "frontend-admin/src/App.jsx"],
             label_trust=trusted_labels("deploy-sandbox"),
         )
 
         self.assertEqual(report["decision"], "pass")
         self.assertFalse(report["shouldFail"])
         self.assertFalse(report["block"])
-        self.assertEqual(report["governanceMode"], "sandbox_deploy")
+        self.assertEqual(report["governanceMode"], "sandbox_deploy_requested")
         self.assertEqual(report["deployLabelActor"], "chiendz11")
+        self.assertTrue(report["sandboxRecommended"])
+        self.assertTrue(report["autoApplyEligible"])
 
     def test_deploy_preview_label_is_supported_alias(self) -> None:
         report = evaluate_policy(
             make_event(labels=["deploy-preview"]),
-            ["deploy/helm/face-detector/templates/nginx.yaml"],
+            ["backend/app/main.py", "frontend-admin/src/App.jsx"],
             label_trust=trusted_labels("deploy-preview"),
         )
 
@@ -127,10 +118,23 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         self.assertFalse(report["shouldFail"])
         self.assertFalse(report["block"])
 
-    def test_untrusted_deploy_label_does_not_clear_governance_block(self) -> None:
+    def test_deploy_contract_with_deploy_label_still_requires_validation(self) -> None:
         report = evaluate_policy(
             make_event(labels=["deploy-sandbox"]),
             ["deploy/helm/face-detector/templates/nginx.yaml"],
+            label_trust=trusted_labels("deploy-sandbox"),
+        )
+
+        self.assertEqual(report["classification"], "heavy")
+        self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["sandboxRequired"])
+        self.assertTrue(report["autoApplyEligible"])
+        self.assertTrue(report["block"])
+
+    def test_untrusted_deploy_label_does_not_clear_governance_block(self) -> None:
+        report = evaluate_policy(
+            make_event(labels=["deploy-sandbox"]),
+            ["terraform/eks/main.tf"],
             label_trust=untrusted_labels("deploy-sandbox"),
         )
 
@@ -138,7 +142,45 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         self.assertTrue(report["shouldFail"])
         self.assertTrue(report["block"])
         self.assertFalse(report["deployLabelTrusted"])
-        self.assertIn("missing_sandbox_label_or_approval", report["blockingReasons"])
+        self.assertIn("sandbox_required_missing_validation_or_waiver", report["blockingReasons"])
+
+    def test_critical_path_with_deploy_label_runs_apply_but_still_blocks_merge(self) -> None:
+        report = evaluate_policy(
+            make_event(labels=["deploy-sandbox"]),
+            ["terraform/eks/main.tf"],
+            label_trust=trusted_labels("deploy-sandbox"),
+        )
+
+        self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["sandboxRequired"])
+        self.assertTrue(report["autoApplyEligible"])
+        self.assertTrue(report["block"])
+
+    def test_critical_path_with_sandbox_validation_passes(self) -> None:
+        report = evaluate_policy(
+            make_event(labels=["sandbox-validated"]),
+            ["terraform/eks/main.tf"],
+            label_trust=trusted_labels("sandbox-validated", actor="github-actions[bot]"),
+        )
+
+        self.assertEqual(report["decision"], "pass")
+        self.assertTrue(report["sandboxRequired"])
+        self.assertTrue(report["sandboxValidatedTrusted"])
+        self.assertFalse(report["block"])
+        self.assertEqual(report["governanceMode"], "sandbox_validated")
+
+    def test_critical_path_with_owner_waiver_passes(self) -> None:
+        report = evaluate_policy(
+            make_event(labels=["skip-sandbox-approved"]),
+            ["terraform/eks/main.tf"],
+            label_trust=trusted_labels("skip-sandbox-approved"),
+        )
+
+        self.assertEqual(report["decision"], "pass")
+        self.assertTrue(report["sandboxRequired"])
+        self.assertTrue(report["skipSandboxTrusted"])
+        self.assertFalse(report["block"])
+        self.assertEqual(report["governanceMode"], "sandbox_waived")
 
     def test_critical_path_self_approve_still_requires_sandbox_label(self) -> None:
         report = evaluate_policy(
@@ -152,9 +194,9 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         self.assertEqual(report["decision"], "fail")
         self.assertTrue(report["shouldFail"])
         self.assertTrue(report["block"])
-        self.assertIn("critical_path_requires_sandbox", report["blockingReasons"])
+        self.assertIn("sandbox_required_missing_validation_or_waiver", report["blockingReasons"])
 
-    def test_untrusted_self_approve_label_does_not_clear_governance_block(self) -> None:
+    def test_untrusted_self_approve_label_does_not_enable_self_approve(self) -> None:
         report = evaluate_policy(
             make_event(labels=["allow-self-approve"]),
             [".github/workflows/sandbox-policy.yml"],
@@ -164,6 +206,7 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         )
 
         self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["sandboxRequired"])
         self.assertTrue(report["block"])
         self.assertFalse(report["selfApproveUsed"])
         self.assertFalse(report["selfApproveLabelTrusted"])
@@ -201,7 +244,8 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
             report = print_report.call_args.args[0]
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(report["decision"], "pass")
+        self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["block"])
         self.assertTrue(report["selfApproveEligible"])
         self.assertTrue(report["selfApproveUsed"])
         self.assertEqual(report["selfApproveActor"], "chiendz11")
@@ -217,27 +261,30 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
 
         self.assertEqual(report["classification"], "heavy")
         self.assertEqual(report["decision"], "fail")
+        self.assertTrue(report["sandboxRequired"])
         self.assertTrue(report["shouldFail"])
 
-    def test_release_contract_change_without_label_fails(self) -> None:
+    def test_release_contract_change_without_label_is_recommended(self) -> None:
         report = evaluate_policy(
             make_event(),
             ["frontend-admin/Dockerfile"],
         )
 
         self.assertEqual(report["classification"], "heavy")
-        self.assertEqual(report["decision"], "fail")
-        self.assertTrue(report["shouldFail"])
+        self.assertEqual(report["decision"], "pass")
+        self.assertTrue(report["sandboxRecommended"])
+        self.assertFalse(report["shouldFail"])
 
-    def test_compose_override_change_without_label_fails(self) -> None:
+    def test_compose_override_change_without_label_is_recommended(self) -> None:
         report = evaluate_policy(
             make_event(),
             ["docker-compose.dev.yml"],
         )
 
         self.assertEqual(report["classification"], "heavy")
-        self.assertEqual(report["decision"], "fail")
-        self.assertTrue(report["shouldFail"])
+        self.assertEqual(report["decision"], "pass")
+        self.assertTrue(report["sandboxRecommended"])
+        self.assertFalse(report["shouldFail"])
 
     def test_qa_scripts_and_docs_stay_fast_lane(self) -> None:
         report = evaluate_policy(
@@ -274,6 +321,14 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         )
         self.assertIn("issues.listEvents", label_step["with"]["script"])
         self.assertIn("actor === repoOwner", label_step["with"]["script"])
+        self.assertIn("skip-sandbox-approved", label_step["with"]["script"])
+        self.assertIn("sandbox-validated", label_step["with"]["script"])
+
+        reconcile_step = next(
+            step for step in steps if step.get("name") == "Reconcile sandbox governance labels"
+        )
+        self.assertIn("sandbox-required", reconcile_step["with"]["script"])
+        self.assertIn("sandbox-recommended", reconcile_step["with"]["script"])
 
         comment_step = next(
             step for step in steps if step.get("name") == "Upsert sandbox policy PR comment"
@@ -309,8 +364,10 @@ class SandboxRequirementPolicyTest(unittest.TestCase):
         workflow_text = workflow_path.read_text(encoding="utf-8")
 
         self.assertIn("const deployLabels = ['deploy-sandbox', 'deploy-preview'];", workflow_text)
-        self.assertIn("e.label.name === deployLabel", workflow_text)
-        self.assertIn("actor !== context.repo.owner", workflow_text)
+        self.assertIn("report.autoApplyEligible", workflow_text)
+        self.assertIn("sandbox-validated", workflow_text)
+        self.assertIn("listPullRequestsAssociatedWithCommit", workflow_text)
+        self.assertIn("sandbox-validation-status", workflow_text)
 
 
 if __name__ == "__main__":
