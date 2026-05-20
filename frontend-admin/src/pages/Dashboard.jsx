@@ -17,6 +17,8 @@ import {
   updateEmployee as requestUpdateEmployee,
 } from "../features/employees/employeeApi";
 import FaceEnrollmentPage from "../features/enrollment/FaceEnrollmentPage";
+import AuditLogsPanel from "../features/logs/AuditLogsPanel";
+import RecognitionLogsPanel from "../features/logs/RecognitionLogsPanel";
 
 const defaultSession = {
   status: "ready",
@@ -518,19 +520,11 @@ export default function Dashboard() {
           )}
 
           {activeSection === "recognition-logs" && (
-            <section className="card form-card">
-              <p className="eyebrow">Face Recognition</p>
-              <h2>Recognition Logs</h2>
-              <p className="muted">No recognition events loaded yet.</p>
-            </section>
+            <RecognitionLogsPanel authHeaders={authHeaders} onUnauthorized={handleLogout} />
           )}
 
           {activeSection === "audit-logs" && (
-            <section className="card form-card">
-              <p className="eyebrow">Governance</p>
-              <h2>Audit Logs</h2>
-              <p className="muted">No audit events loaded yet.</p>
-            </section>
+            <AuditLogsPanel authHeaders={authHeaders} onUnauthorized={handleLogout} />
           )}
 
           {activeSection === "devices" && (

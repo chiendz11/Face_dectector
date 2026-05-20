@@ -88,6 +88,37 @@ class EnrollmentSessionStatusResponse(BaseModel):
     sample_count: int | None = None
 
 
+class RecognitionEventRecord(BaseModel):
+    id: int
+    employee_code: str | None = None
+    matched: bool
+    confidence: float
+    device_name: str | None = None
+    filename: str
+    snapshot_url: str
+    created_at: datetime
+
+
+class RecognitionEventListResponse(BaseModel):
+    items: list[RecognitionEventRecord] = Field(default_factory=list)
+    total: int
+
+
+class AuditEventRecord(BaseModel):
+    id: int
+    actor: str
+    action: str
+    resource_type: str
+    resource_id: str | None = None
+    metadata: dict | None = None
+    created_at: datetime
+
+
+class AuditEventListResponse(BaseModel):
+    items: list[AuditEventRecord] = Field(default_factory=list)
+    total: int
+
+
 class RecognitionResult(BaseModel):
     matched: bool
     employee_code: str | None = None

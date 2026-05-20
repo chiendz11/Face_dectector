@@ -77,3 +77,15 @@ class EnrollmentSession(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    actor = Column(String(128), nullable=False, index=True)
+    action = Column(String(64), nullable=False, index=True)
+    resource_type = Column(String(64), nullable=False, index=True)
+    resource_id = Column(String(128), nullable=True, index=True)
+    event_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

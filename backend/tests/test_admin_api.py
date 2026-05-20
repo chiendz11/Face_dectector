@@ -2,20 +2,33 @@ from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
 from app.api.dependencies import (
+    get_audit_log_service,
     get_current_user,
     get_deepface_service,
     get_department_registry_service,
     get_employee_registry_service,
     get_enrollment_session_service,
+    get_recognition_log_service,
     get_vector_search_service,
 )
 from app.api.endpoints_admin import router as admin_router
 from app.core.config import settings
+from app.models.db_models import RecognitionEvent
 from app.models.schemas import EmployeeCreate
+from app.services.audit_log_service import AuditLogService
 from app.services.department_registry import DepartmentRegistryService
 from app.services.employee_registry import EmployeeRegistryService
 from app.services.enrollment_session_service import EnrollmentSessionService
+from app.services.recognition_log_service import RecognitionLogService
 from app.services.vector_search_service import VectorSearchService
+
+
+def override_audit_log(client: TestClient, sqlite_session) -> None:
+    client.app.dependency_overrides[get_audit_log_service] = lambda: AuditLogService(sqlite_session)
+
+
+def override_recognition_log(client: TestClient, sqlite_session) -> None:
+    client.app.dependency_overrides[get_recognition_log_service] = lambda: RecognitionLogService(sqlite_session)
 
 
 class FakeDeepFaceService:
@@ -38,6 +51,7 @@ def test_admin_employee_crud_flow(sqlite_session) -> None:
     client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
     client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     create_response = client.post(
         "/api/admin/employees",
@@ -69,6 +83,7 @@ def test_admin_department_crud_and_employee_dropdown_contract(sqlite_session) ->
     client.app.dependency_overrides[get_department_registry_service] = lambda: department_registry
     client.app.dependency_overrides[get_employee_registry_service] = lambda: employee_registry
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     department_response = client.post("/api/admin/departments", json={"name": "Security"})
 
@@ -113,6 +128,7 @@ def test_admin_create_employee_rejects_duplicate_code(sqlite_session) -> None:
     )
     client.app.dependency_overrides[get_employee_registry_service] = lambda: service
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     response = client.post(
         "/api/admin/employees",
@@ -141,6 +157,7 @@ def test_admin_delete_employee_returns_not_found_for_unknown_employee(sqlite_ses
     client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
     client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     response = client.delete("/api/admin/employees/EMP-404")
 
@@ -162,6 +179,7 @@ def test_admin_delete_employee_rejects_blank_employee_code(sqlite_session) -> No
     client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
     client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     response = client.delete("/api/admin/employees/%20%20")
 
@@ -179,6 +197,7 @@ def test_admin_update_employee_changes_editable_fields(sqlite_session) -> None:
     service.create_employee(EmployeeCreate(employee_code="emp-107", full_name="Old Name", department="Ops"))
     client.app.dependency_overrides[get_employee_registry_service] = lambda: service
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     response = client.patch(
         "/api/admin/employees/EMP-107",
@@ -210,6 +229,7 @@ def test_admin_delete_employee_soft_deletes_and_revokes_embedding(sqlite_session
     client.app.dependency_overrides[get_employee_registry_service] = lambda: employee_registry
     client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     delete_response = client.delete("/api/admin/employees/EMP-108")
     active_list_response = client.get("/api/admin/employees")
@@ -240,6 +260,7 @@ def test_admin_enroll_face_upserts_embedding(sqlite_session) -> None:
     client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_deepface_service] = lambda: FakeDeepFaceService()
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     create_response = client.post(
         "/api/admin/employees",
@@ -296,6 +317,7 @@ def test_admin_enroll_face_samples_averages_live_capture_embeddings(sqlite_sessi
     client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_deepface_service] = lambda: SequenceDeepFaceService()
     client.app.dependency_overrides[get_current_user] = lambda: "admin-operator"
+    override_audit_log(client, sqlite_session)
 
     response = client.post(
         "/api/admin/employees/EMP-105/enroll-samples",
@@ -336,6 +358,7 @@ def test_admin_create_enrollment_session_returns_one_time_token(sqlite_session) 
     client.app.dependency_overrides[get_employee_registry_service] = lambda: employee_registry
     client.app.dependency_overrides[get_enrollment_session_service] = lambda: session_service
     client.app.dependency_overrides[get_current_user] = lambda: "admin-creator"
+    override_audit_log(client, sqlite_session)
 
     response = client.post("/api/admin/employees/EMP-109/enrollment-sessions")
 
@@ -379,6 +402,7 @@ def test_admin_complete_enrollment_session_uses_token_without_admin_login(sqlite
     client.app.dependency_overrides[get_enrollment_session_service] = lambda: session_service
     client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_deepface_service] = lambda: SequenceDeepFaceService()
+    override_audit_log(client, sqlite_session)
 
     response = client.post(
         f"/api/admin/enrollment-sessions/{token}/complete",
@@ -422,6 +446,7 @@ def test_admin_enroll_face_samples_requires_minimum_sample_count(sqlite_session)
     )
     client.app.dependency_overrides[get_deepface_service] = lambda: FakeDeepFaceService()
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     response = client.post(
         "/api/admin/employees/EMP-106/enroll-samples",
@@ -453,6 +478,7 @@ def test_admin_enroll_face_returns_not_found_for_unknown_employee(sqlite_session
     client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_deepface_service] = lambda: FakeDeepFaceService()
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     response = client.post(
         "/api/admin/employees/EMP-404/enroll",
@@ -480,6 +506,7 @@ def test_admin_enroll_face_rejects_empty_file(sqlite_session) -> None:
     client.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
     client.app.dependency_overrides[get_deepface_service] = lambda: FakeDeepFaceService()
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     response = client.post(
         "/api/admin/employees/EMP-103/enroll",
@@ -519,6 +546,7 @@ def test_admin_enroll_face_upserts_on_second_enroll(sqlite_session) -> None:
         c.app.dependency_overrides[get_vector_search_service] = lambda: vector_search_service
         c.app.dependency_overrides[get_deepface_service] = lambda: deepface_service
         c.app.dependency_overrides[get_current_user] = lambda: "admin"
+        override_audit_log(c, sqlite_session)
         return c
 
     c1 = make_client(FirstImageService())
@@ -591,6 +619,7 @@ def test_admin_create_employee_rejects_blank_employee_code(sqlite_session) -> No
     client = TestClient(app)
     client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     response = client.post(
         "/api/admin/employees",
@@ -609,6 +638,7 @@ def test_admin_create_employee_allows_null_department(sqlite_session) -> None:
     client = TestClient(app)
     client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
     client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
 
     response = client.post(
         "/api/admin/employees",
@@ -677,3 +707,71 @@ def test_admin_list_employees_supports_lazy_search(sqlite_session) -> None:
     payload = response.json()
     assert payload["total"] == 1
     assert payload["items"][0]["employee_code"] == "EMP-301"
+
+
+def test_admin_list_recognition_events_supports_filters(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    sqlite_session.add_all(
+        [
+            RecognitionEvent(
+                employee_code="EMP-401",
+                matched=True,
+                confidence=0.92,
+                device_name="edge-main",
+                filename="match.jpg",
+                snapshot_url="/snapshots/match.jpg",
+            ),
+            RecognitionEvent(
+                employee_code=None,
+                matched=False,
+                confidence=0.12,
+                device_name="edge-side",
+                filename="miss.jpg",
+                snapshot_url="/snapshots/miss.jpg",
+            ),
+        ]
+    )
+    sqlite_session.commit()
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_recognition_log(client, sqlite_session)
+
+    response = client.get("/api/admin/recognition-events?matched=true&employee_code=EMP-401&limit=10")
+
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["employee_code"] == "EMP-401"
+    assert payload["items"][0]["matched"] is True
+    assert payload["items"][0]["device_name"] == "edge-main"
+
+
+def test_admin_audit_events_are_recorded_for_employee_create(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+    override_audit_log(client, sqlite_session)
+
+    create_response = client.post(
+        "/api/admin/employees",
+        json={"employee_code": "emp-402", "full_name": "Audited User", "department": "Security"},
+    )
+    audit_response = client.get("/api/admin/audit-events?action=employee.create&limit=10")
+
+    client.app.dependency_overrides.clear()
+
+    assert create_response.status_code == 201
+    assert audit_response.status_code == 200
+    payload = audit_response.json()
+    assert payload["total"] == 1
+    event = payload["items"][0]
+    assert event["actor"] == "admin"
+    assert event["action"] == "employee.create"
+    assert event["resource_type"] == "employee"
+    assert event["resource_id"] == "EMP-402"
+    assert event["metadata"]["full_name"] == "Audited User"

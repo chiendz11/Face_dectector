@@ -164,6 +164,18 @@ select {
   margin-bottom: 0;
 }
 
+.filter-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.filter-bar label {
+  margin-bottom: 0;
+}
+
 button.button {
   display: inline-flex;
   align-items: center;
@@ -301,6 +313,11 @@ table tbody tr.inactive-row {
   background: rgba(99, 112, 131, 0.08);
 }
 
+td code {
+  white-space: normal;
+  word-break: break-word;
+}
+
 .card-value {
   display: block;
   margin-bottom: 8px;
@@ -430,7 +447,8 @@ table tbody tr.inactive-row {
   .section-header,
   .staff-selection,
   .form-row,
-  .compact-form {
+  .compact-form,
+  .filter-bar {
     align-items: stretch;
     flex-direction: column;
     grid-template-columns: 1fr;

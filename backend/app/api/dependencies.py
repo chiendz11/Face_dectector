@@ -6,16 +6,26 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db import get_db, get_read_db
+from app.services.audit_log_service import AuditLogService
 from app.services.auth_service import AuthService
 from app.services.deepface_service import DeepFaceService
 from app.services.department_registry import DepartmentRegistryService
 from app.services.employee_registry import EmployeeRegistryService
 from app.services.enrollment_session_service import EnrollmentSessionService
 from app.services.minio_service import MinioService
+from app.services.recognition_log_service import RecognitionLogService
 from app.services.vector_search_service import VectorSearchService
 from app.services.recognition_service import RecognitionService
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_prefix}/auth/login")
+
+
+def get_audit_log_service(db: Session = Depends(get_db)) -> AuditLogService:
+    return AuditLogService(db=db)
+
+
+def get_recognition_log_service(db: Session = Depends(get_db)) -> RecognitionLogService:
+    return RecognitionLogService(db=db)
 
 
 def get_employee_registry_service(db: Session = Depends(get_db)) -> EmployeeRegistryService:
