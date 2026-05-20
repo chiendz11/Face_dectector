@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from app.api.dependencies import (
     get_current_user,
     get_deepface_service,
+    get_department_registry_service,
     get_employee_registry_service,
     get_enrollment_session_service,
     get_vector_search_service,
@@ -11,6 +12,7 @@ from app.api.dependencies import (
 from app.api.endpoints_admin import router as admin_router
 from app.core.config import settings
 from app.models.schemas import EmployeeCreate
+from app.services.department_registry import DepartmentRegistryService
 from app.services.employee_registry import EmployeeRegistryService
 from app.services.enrollment_session_service import EnrollmentSessionService
 from app.services.vector_search_service import VectorSearchService
@@ -56,6 +58,45 @@ def test_admin_employee_crud_flow(sqlite_session) -> None:
     assert list_response.json()["total"] == 1
     assert delete_response.status_code == 200
     assert delete_response.json() == {"employee_code": "EMP-100", "deleted": True}
+
+
+def test_admin_department_crud_and_employee_dropdown_contract(sqlite_session) -> None:
+    app = FastAPI()
+    app.include_router(admin_router, prefix="/api")
+    client = TestClient(app)
+    department_registry = DepartmentRegistryService(sqlite_session)
+    employee_registry = EmployeeRegistryService(sqlite_session)
+    client.app.dependency_overrides[get_department_registry_service] = lambda: department_registry
+    client.app.dependency_overrides[get_employee_registry_service] = lambda: employee_registry
+    client.app.dependency_overrides[get_current_user] = lambda: "admin"
+
+    department_response = client.post("/api/admin/departments", json={"name": "Security"})
+
+    assert department_response.status_code == 201
+    department = department_response.json()
+    assert department["code"] == "SECURITY"
+
+    employee_response = client.post(
+        "/api/admin/employees",
+        json={"full_name": "Auto Code User", "department_id": department["id"]},
+    )
+
+    assert employee_response.status_code == 201
+    employee = employee_response.json()
+    assert employee["employee_code"].startswith("EMP-")
+    assert employee["department_id"] == department["id"]
+    assert employee["department"] == "Security"
+    assert employee["has_face_embedding"] is False
+
+    list_response = client.get("/api/admin/departments")
+    assert list_response.status_code == 200
+    assert list_response.json()["items"] == [department]
+
+    delete_response = client.delete(f"/api/admin/departments/{department['id']}")
+    assert delete_response.status_code == 409
+    assert delete_response.json()["detail"] == "department has active employees"
+
+    client.app.dependency_overrides.clear()
 
 
 def test_admin_create_employee_rejects_duplicate_code(sqlite_session) -> None:

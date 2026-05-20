@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, JSON, String, func
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, func
 
 from app.core.config import settings
 from app.db import Base
@@ -15,7 +15,20 @@ class Employee(Base):
     id = Column(Integer, primary_key=True, index=True)
     employee_code = Column(String(32), unique=True, nullable=False, index=True)
     full_name = Column(String(128), nullable=False)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True, index=True)
     department = Column(String(64), nullable=True)
+    active = Column(Boolean, default=True, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Department(Base):
+    __tablename__ = "departments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(32), unique=True, nullable=False, index=True)
+    name = Column(String(96), unique=True, nullable=False)
     active = Column(Boolean, default=True, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)

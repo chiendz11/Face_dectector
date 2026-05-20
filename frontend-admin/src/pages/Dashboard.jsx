@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import StatCard from "../components/StatCard";
+import DepartmentPanel from "../features/departments/DepartmentPanel";
+import {
+  createDepartment as requestCreateDepartment,
+  deactivateDepartment as requestDeactivateDepartment,
+  listDepartments as requestDepartments,
+  updateDepartment as requestUpdateDepartment,
+} from "../features/departments/departmentApi";
 import EmployeeForm from "../features/employees/EmployeeForm";
 import EmployeeTable from "../features/employees/EmployeeTable";
 import {
@@ -19,14 +26,18 @@ const defaultSession = {
 export default function Dashboard() {
   const [token, setToken] = useState(() => localStorage.getItem("admin_token") || "");
   const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [status, setStatus] = useState(defaultSession.status);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [includeInactive, setIncludeInactive] = useState(false);
   const [credentials, setCredentials] = useState({ username: "admin", password: "admin" });
-  const [newEmployee, setNewEmployee] = useState({ employee_code: "", full_name: "", department: "" });
+  const [newEmployee, setNewEmployee] = useState({ full_name: "", department_id: "" });
+  const [newDepartment, setNewDepartment] = useState({ name: "" });
   const [editingCode, setEditingCode] = useState("");
-  const [editEmployee, setEditEmployee] = useState({ full_name: "", department: "" });
+  const [editEmployee, setEditEmployee] = useState({ full_name: "", department_id: "" });
+  const [editingDepartmentId, setEditingDepartmentId] = useState("");
+  const [editDepartment, setEditDepartment] = useState({ name: "" });
   const [enrollmentSession, setEnrollmentSession] = useState(null);
 
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
@@ -37,8 +48,16 @@ export default function Dashboard() {
   useEffect(() => {
     if (token) {
       fetchEmployees();
+      fetchDepartments();
     }
   }, [token, includeInactive]);
+
+  function employeePayload(employee) {
+    return {
+      full_name: employee.full_name,
+      department_id: employee.department_id ? Number(employee.department_id) : null,
+    };
+  }
 
   async function fetchEmployees() {
     setStatus("loading");
@@ -60,6 +79,26 @@ export default function Dashboard() {
       setStatus("loaded");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      setStatus("error");
+    }
+  }
+
+  async function fetchDepartments() {
+    try {
+      const { response, payload } = await requestDepartments({ includeInactive: false, authHeaders });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Failed to load departments");
+      }
+
+      setDepartments(payload.items || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load departments");
       setStatus("error");
     }
   }
@@ -94,7 +133,9 @@ export default function Dashboard() {
     localStorage.removeItem("admin_token");
     setToken("");
     setEmployees([]);
+    setDepartments([]);
     setEditingCode("");
+    setEditingDepartmentId("");
     setEnrollmentSession(null);
     setMessage("");
     setStatus(defaultSession.status);
@@ -109,7 +150,7 @@ export default function Dashboard() {
 
     try {
       const { response, payload } = await requestCreateEmployee({
-        employee: newEmployee,
+        employee: employeePayload(newEmployee),
         jsonHeaders,
       });
 
@@ -123,7 +164,7 @@ export default function Dashboard() {
       }
 
       await fetchEmployees();
-      setNewEmployee({ employee_code: "", full_name: "", department: "" });
+      setNewEmployee({ full_name: "", department_id: "" });
       setMessage(`Employee ${payload.employee_code} created.`);
       setStatus("loaded");
     } catch (err) {
@@ -132,11 +173,42 @@ export default function Dashboard() {
     }
   }
 
+  async function handleCreateDepartment(event) {
+    event.preventDefault();
+    setStatus("loading");
+    setError("");
+    setMessage("");
+
+    try {
+      const { response, payload } = await requestCreateDepartment({
+        department: newDepartment,
+        jsonHeaders,
+      });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Create department failed");
+      }
+
+      await fetchDepartments();
+      setNewDepartment({ name: "" });
+      setMessage(`Department ${payload.name} created.`);
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Create department failed");
+      setStatus("error");
+    }
+  }
+
   function startEdit(employee) {
     setEditingCode(employee.employee_code);
     setEditEmployee({
       full_name: employee.full_name || "",
-      department: employee.department || "",
+      department_id: employee.department_id ? String(employee.department_id) : "",
     });
     setError("");
     setMessage("");
@@ -151,7 +223,7 @@ export default function Dashboard() {
     try {
       const { response, payload } = await requestUpdateEmployee({
         employeeCode,
-        employee: editEmployee,
+        employee: employeePayload(editEmployee),
         jsonHeaders,
       });
 
@@ -170,6 +242,72 @@ export default function Dashboard() {
       setStatus("loaded");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
+      setStatus("error");
+    }
+  }
+
+  function startDepartmentEdit(department) {
+    setEditingDepartmentId(department.id);
+    setEditDepartment({ name: department.name || "" });
+    setError("");
+    setMessage("");
+  }
+
+  async function submitDepartmentEdit(event, departmentId) {
+    event.preventDefault();
+    setStatus("loading");
+    setError("");
+    setMessage("");
+
+    try {
+      const { response, payload } = await requestUpdateDepartment({
+        departmentId,
+        department: editDepartment,
+        jsonHeaders,
+      });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Update department failed");
+      }
+
+      setEditingDepartmentId("");
+      await fetchDepartments();
+      await fetchEmployees();
+      setMessage(`Department ${payload.name} updated.`);
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update department failed");
+      setStatus("error");
+    }
+  }
+
+  async function deactivateDepartment(departmentId) {
+    setStatus("loading");
+    setError("");
+    setMessage("");
+
+    try {
+      const { response, payload } = await requestDeactivateDepartment({ departmentId, authHeaders });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Deactivate department failed");
+      }
+
+      await fetchDepartments();
+      setMessage(`Department ${payload.id} deactivated.`);
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Deactivate department failed");
       setStatus("error");
     }
   }
@@ -313,11 +451,26 @@ export default function Dashboard() {
           </section>
 
           <EmployeeForm
+            departments={departments}
             employee={newEmployee}
             error={error}
             onChange={setNewEmployee}
             onLogout={handleLogout}
             onSubmit={handleCreateEmployee}
+          />
+
+          <DepartmentPanel
+            departments={departments}
+            editingDepartmentId={editingDepartmentId}
+            editDepartment={editDepartment}
+            newDepartment={newDepartment}
+            onCreateDepartment={handleCreateDepartment}
+            onDeactivateDepartment={deactivateDepartment}
+            onEditDepartmentCancel={() => setEditingDepartmentId("")}
+            onEditDepartmentChange={setEditDepartment}
+            onEditDepartmentStart={startDepartmentEdit}
+            onNewDepartmentChange={setNewDepartment}
+            onSubmitDepartmentEdit={submitDepartmentEdit}
           />
 
           {enrollmentSession && (
@@ -329,6 +482,7 @@ export default function Dashboard() {
           )}
 
           <EmployeeTable
+            departments={departments}
             editEmployee={editEmployee}
             editingCode={editingCode}
             employees={employees}

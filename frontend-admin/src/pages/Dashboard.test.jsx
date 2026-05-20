@@ -26,6 +26,7 @@ function loginHandlers(extra = {}) {
   return {
     "POST /api/auth/login": { status: 200, body: AUTH_RESPONSE },
     "GET /api/admin/employees": { status: 200, body: { items: [], total: 0 } },
+    "GET /api/admin/departments": { status: 200, body: { items: [], total: 0 } },
     ...extra,
   };
 }
@@ -169,7 +170,7 @@ describe("Dashboard employee list", () => {
     expect(screen.getByText("Alice Nguyen")).toBeInTheDocument();
     expect(screen.getByText("EMP-002")).toBeInTheDocument();
     expect(screen.getByText("Bob Tran")).toBeInTheDocument();
-    expect(screen.getAllByText("None").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Unassigned").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows stat card with active employee count", async () => {
@@ -210,13 +211,20 @@ describe("Dashboard create employee form", () => {
           postBody = JSON.parse(opts.body);
           return {
             status: 201,
-            body: { employee_code: "EMP-010", full_name: "Tran Van A", department: "Security", active: true },
+            body: { employee_code: "EMP-010", full_name: "Tran Van A", department_id: 1, department: "Security", active: true },
           };
         },
         "GET /api/admin/employees": {
           status: 200,
           body: {
-            items: [{ employee_code: "EMP-010", full_name: "Tran Van A", department: "Security", active: true }],
+            items: [{ employee_code: "EMP-010", full_name: "Tran Van A", department_id: 1, department: "Security", active: true }],
+            total: 1,
+          },
+        },
+        "GET /api/admin/departments": {
+          status: 200,
+          body: {
+            items: [{ id: 1, code: "SECURITY", name: "Security", active: true }],
             total: 1,
           },
         },
@@ -224,13 +232,12 @@ describe("Dashboard create employee form", () => {
     );
     await performLogin(fetchMock);
 
-    fireEvent.change(screen.getByLabelText(/employee code/i), { target: { value: "EMP-010" } });
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Tran Van A" } });
-    fireEvent.change(screen.getByLabelText(/department/i), { target: { value: "Security" } });
+    fireEvent.change(screen.getByLabelText(/^department$/i), { target: { value: "1" } });
     fireEvent.click(screen.getByRole("button", { name: /add employee/i }));
 
     await waitFor(() => expect(screen.getByText("EMP-010")).toBeInTheDocument());
-    expect(postBody).toEqual({ employee_code: "EMP-010", full_name: "Tran Van A", department: "Security" });
+    expect(postBody).toEqual({ full_name: "Tran Van A", department_id: 1 });
   });
 
   it("shows error when create employee returns 409", async () => {
@@ -244,7 +251,6 @@ describe("Dashboard create employee form", () => {
     );
     await performLogin(fetchMock);
 
-    fireEvent.change(screen.getByLabelText(/employee code/i), { target: { value: "EMP-010" } });
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Duplicate" } });
     fireEvent.click(screen.getByRole("button", { name: /add employee/i }));
 
@@ -274,8 +280,18 @@ describe("Dashboard enrollment sessions and employee lifecycle", () => {
           ok: true,
           status: 200,
           json: async () => ({
-            items: [{ employee_code: "EMP-100", full_name: "Nguyen Van A", department: "IT", active: true }],
+            items: [{ employee_code: "EMP-100", full_name: "Nguyen Van A", department_id: 1, department: "IT", active: true, has_face_embedding: false }],
             total: 1,
+          }),
+        };
+      }
+      if (url === "/api/admin/departments" && (!opts?.method || opts.method === "GET")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [{ id: 1, code: "IT", name: "IT", active: true }, { id: 2, code: "SECURITY", name: "Security", active: true }],
+            total: 2,
           }),
         };
       }
@@ -310,7 +326,7 @@ describe("Dashboard enrollment sessions and employee lifecycle", () => {
     await performLogin(fetchMock);
 
     await waitFor(() => screen.getByText("EMP-100"));
-    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
+    fireEvent.click(screen.getByRole("button", { name: /enroll face/i }));
 
     await waitFor(() => screen.getByLabelText(/enrollment camera preview/i));
     expect(capturedHeaders.Authorization).toBe(`Bearer ${TOKEN}`);
@@ -354,7 +370,7 @@ describe("Dashboard enrollment sessions and employee lifecycle", () => {
     await performLogin(fetchMock);
 
     await waitFor(() => screen.getByText("EMP-100"));
-    fireEvent.click(screen.getByRole("button", { name: /open camera/i }));
+    fireEvent.click(screen.getByRole("button", { name: /enroll face/i }));
     const captureButton = await screen.findByRole("button", { name: /capture/i });
     await waitFor(() => expect(captureButton).not.toBeDisabled());
     fireEvent.click(captureButton);
@@ -377,7 +393,7 @@ describe("Dashboard enrollment sessions and employee lifecycle", () => {
         return {
           ok: true,
           status: 200,
-          json: async () => ({ employee_code: "EMP-100", full_name: "Nguyen Van B", department: "Security", active: true }),
+        json: async () => ({ employee_code: "EMP-100", full_name: "Nguyen Van B", department_id: 2, department: "Security", active: true }),
         };
       }
       return null;
@@ -385,13 +401,14 @@ describe("Dashboard enrollment sessions and employee lifecycle", () => {
     await performLogin(fetchMock);
 
     await waitFor(() => screen.getByText("EMP-100"));
-    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    const row = screen.getByText("EMP-100").closest("tr");
+    fireEvent.click(within(row).getByRole("button", { name: /edit/i }));
     fireEvent.change(screen.getByLabelText(/full name for EMP-100/i), { target: { value: "Nguyen Van B" } });
-    fireEvent.change(screen.getByLabelText(/department for EMP-100/i), { target: { value: "Security" } });
+    fireEvent.change(screen.getByLabelText(/department for EMP-100/i), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
     await waitFor(() => screen.getByText(/employee EMP-100 updated/i));
-    expect(patchBody).toEqual({ full_name: "Nguyen Van B", department: "Security" });
+    expect(patchBody).toEqual({ full_name: "Nguyen Van B", department_id: 2 });
   });
 
   it("soft deletes an employee through the deactivate action", async () => {
@@ -406,9 +423,32 @@ describe("Dashboard enrollment sessions and employee lifecycle", () => {
     await performLogin(fetchMock);
 
     await waitFor(() => screen.getByText("EMP-100"));
-    fireEvent.click(screen.getByRole("button", { name: /deactivate/i }));
+    const row = screen.getByText("EMP-100").closest("tr");
+    fireEvent.click(within(row).getByRole("button", { name: /deactivate/i }));
 
     await waitFor(() => screen.getByText(/employee EMP-100 deactivated/i));
     expect(deleteHeaders.Authorization).toBe(`Bearer ${TOKEN}`);
+  });
+
+  it("creates departments for the employee dropdown", async () => {
+    let postBody;
+    const fetchMock = makeEmployeeFetchMock((url, opts) => {
+      if (url === "/api/admin/departments" && opts?.method === "POST") {
+        postBody = JSON.parse(opts.body);
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({ id: 3, code: "OPERATIONS", name: "Operations", active: true }),
+        };
+      }
+      return null;
+    });
+    await performLogin(fetchMock);
+
+    fireEvent.change(screen.getByLabelText(/department name/i), { target: { value: "Operations" } });
+    fireEvent.click(screen.getByRole("button", { name: /add department/i }));
+
+    await waitFor(() => screen.getByText(/department Operations created/i));
+    expect(postBody).toEqual({ name: "Operations" });
   });
 });

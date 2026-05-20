@@ -3,12 +3,18 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from app.api.dependencies import (
     get_current_user,
     get_deepface_service,
+    get_department_registry_service,
     get_employee_registry_service,
     get_enrollment_session_service,
     get_vector_search_service,
 )
 from app.core.config import settings
 from app.models.schemas import (
+    DepartmentCreate,
+    DepartmentDeleteResponse,
+    DepartmentListResponse,
+    DepartmentRecord,
+    DepartmentUpdate,
     EmployeeCreate,
     EmployeeDeleteResponse,
     EmployeeFaceEnrollResponse,
@@ -20,6 +26,7 @@ from app.models.schemas import (
     EnrollmentSessionStatusResponse,
 )
 from app.services.deepface_service import DeepFaceService
+from app.services.department_registry import DepartmentRegistryService
 from app.services.employee_registry import EmployeeRegistryService
 from app.services.enrollment_session_service import EnrollmentSessionService
 from app.services.vector_search_service import VectorSearchService
@@ -30,6 +37,85 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/health")
 def admin_health() -> dict:
     return {"status": "ok", "scope": "admin"}
+
+
+@router.get("/departments", response_model=DepartmentListResponse)
+def list_departments(
+    include_inactive: bool = Query(default=False),
+    current_user: str = Depends(get_current_user),
+    department_registry: DepartmentRegistryService = Depends(get_department_registry_service),
+) -> DepartmentListResponse:
+    _ = current_user
+    departments = department_registry.list_departments(include_inactive=include_inactive)
+    return DepartmentListResponse(items=departments, total=len(departments))
+
+
+@router.post(
+    "/departments",
+    response_model=DepartmentRecord,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_department(
+    department: DepartmentCreate,
+    current_user: str = Depends(get_current_user),
+    department_registry: DepartmentRegistryService = Depends(get_department_registry_service),
+) -> DepartmentRecord:
+    _ = current_user
+    try:
+        return department_registry.create_department(department)
+    except ValueError as exc:
+        status_code = (
+            status.HTTP_409_CONFLICT
+            if "already exists" in str(exc)
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+
+@router.patch("/departments/{department_id}", response_model=DepartmentRecord)
+def update_department(
+    department_id: int,
+    update: DepartmentUpdate,
+    current_user: str = Depends(get_current_user),
+    department_registry: DepartmentRegistryService = Depends(get_department_registry_service),
+) -> DepartmentRecord:
+    _ = current_user
+    try:
+        department = department_registry.update_department(department_id, update)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if department is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"department {department_id} was not found")
+    return department
+
+
+@router.delete("/departments/{department_id}", response_model=DepartmentDeleteResponse)
+def delete_department(
+    department_id: int,
+    current_user: str = Depends(get_current_user),
+    department_registry: DepartmentRegistryService = Depends(get_department_registry_service),
+) -> DepartmentDeleteResponse:
+    _ = current_user
+    try:
+        department = department_registry.delete_department(department_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if department is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"department {department_id} was not found")
+    return DepartmentDeleteResponse(id=department.id, deleted=True)
+
+
+@router.post("/departments/{department_id}/restore", response_model=DepartmentRecord)
+def restore_department(
+    department_id: int,
+    current_user: str = Depends(get_current_user),
+    department_registry: DepartmentRegistryService = Depends(get_department_registry_service),
+) -> DepartmentRecord:
+    _ = current_user
+    department = department_registry.restore_department(department_id)
+    if department is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"department {department_id} was not found")
+    return department
 
 
 @router.get("/employees", response_model=EmployeeListResponse)

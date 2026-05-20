@@ -1,4 +1,5 @@
 export default function EmployeeTable({
+  departments,
   editEmployee,
   editingCode,
   employees,
@@ -37,6 +38,7 @@ export default function EmployeeTable({
               <th>Code</th>
               <th>Full name</th>
               <th>Department</th>
+              <th>Face</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -58,14 +60,26 @@ export default function EmployeeTable({
                 </td>
                 <td>
                   {editingCode === employee.employee_code ? (
-                    <input
+                    <select
                       aria-label={`Department for ${employee.employee_code}`}
-                      value={editEmployee.department}
-                      onChange={(event) => onEditChange({ ...editEmployee, department: event.target.value })}
-                    />
+                      value={editEmployee.department_id}
+                      onChange={(event) => onEditChange({ ...editEmployee, department_id: event.target.value })}
+                    >
+                      <option value="">Unassigned</option>
+                      {departments.map((department) => (
+                        <option key={department.id} value={department.id}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
                   ) : (
-                    employee.department || "None"
+                    employee.department || "Unassigned"
                   )}
+                </td>
+                <td>
+                  <span className={`state-pill ${employee.has_face_embedding ? "ok" : "warn"}`}>
+                    {employee.has_face_embedding ? "enrolled" : "needed"}
+                  </span>
                 </td>
                 <td>
                   <span className={`state-pill ${employee.active === false ? "warn" : "ok"}`}>
@@ -95,7 +109,7 @@ export default function EmployeeTable({
                             className="button button-small"
                             onClick={() => onCreateEnrollmentSession(employee)}
                           >
-                            Open camera
+                            Enroll face
                           </button>
                           <button
                             type="button"

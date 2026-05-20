@@ -3,19 +3,49 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class DepartmentCreate(BaseModel):
+    name: str
+    code: str | None = None
+
+
+class DepartmentUpdate(BaseModel):
+    name: str | None = None
+
+
+class DepartmentRecord(BaseModel):
+    id: int
+    code: str
+    name: str
+    active: bool = True
+
+
+class DepartmentListResponse(BaseModel):
+    items: list[DepartmentRecord] = Field(default_factory=list)
+    total: int
+
+
+class DepartmentDeleteResponse(BaseModel):
+    id: int
+    deleted: bool
+
+
 class EmployeeCreate(BaseModel):
-    employee_code: str
+    employee_code: str | None = None
     full_name: str
+    department_id: int | None = None
     department: str | None = None
 
 
 class EmployeeUpdate(BaseModel):
     full_name: str | None = None
+    department_id: int | None = None
     department: str | None = None
 
 
 class EmployeeRecord(EmployeeCreate):
+    employee_code: str
     active: bool = True
+    has_face_embedding: bool = False
 
 
 class EmployeeListResponse(BaseModel):

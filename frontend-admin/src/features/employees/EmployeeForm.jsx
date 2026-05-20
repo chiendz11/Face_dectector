@@ -1,4 +1,5 @@
 export default function EmployeeForm({
+  departments,
   employee,
   error,
   onChange,
@@ -15,15 +16,6 @@ export default function EmployeeForm({
       </div>
       <form onSubmit={onSubmit}>
         <label>
-          Employee code
-          <input
-            type="text"
-            value={employee.employee_code}
-            onChange={(event) => onChange({ ...employee, employee_code: event.target.value })}
-            required
-          />
-        </label>
-        <label>
           Full name
           <input
             type="text"
@@ -34,11 +26,17 @@ export default function EmployeeForm({
         </label>
         <label>
           Department
-          <input
-            type="text"
-            value={employee.department}
-            onChange={(event) => onChange({ ...employee, department: event.target.value })}
-          />
+          <select
+            value={employee.department_id}
+            onChange={(event) => onChange({ ...employee, department_id: event.target.value })}
+          >
+            <option value="">Unassigned</option>
+            {departments.map((department) => (
+              <option key={department.id} value={department.id}>
+                {department.name}
+              </option>
+            ))}
+          </select>
         </label>
         <button type="submit" className="button">
           Add employee

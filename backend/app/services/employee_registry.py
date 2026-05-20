@@ -1,8 +1,9 @@
 from datetime import UTC, datetime
+import secrets
 
 from sqlalchemy.orm import Session
 
-from app.models.db_models import Employee
+from app.models.db_models import Department, Employee, FaceEmbedding
 from app.models.schemas import EmployeeCreate, EmployeeRecord, EmployeeUpdate
 
 
@@ -31,9 +32,16 @@ class EmployeeRegistryService:
         return self._to_record(record)
 
     def create_employee(self, employee: EmployeeCreate) -> EmployeeRecord:
-        employee_code = self._normalize_employee_code(employee.employee_code)
+        employee_code = (
+            self._normalize_employee_code(employee.employee_code)
+            if employee.employee_code
+            else self._generate_employee_code()
+        )
         full_name = employee.full_name.strip()
-        department = employee.department.strip() if employee.department else None
+        department_id, department = self._resolve_department(
+            department_id=employee.department_id,
+            department_name=employee.department,
+        )
 
         if not full_name:
             raise ValueError("full_name must not be empty")
@@ -49,6 +57,7 @@ class EmployeeRegistryService:
         record = Employee(
             employee_code=employee_code,
             full_name=full_name,
+            department_id=department_id,
             department=department,
             active=True,
         )
@@ -80,7 +89,22 @@ class EmployeeRegistryService:
             record.full_name = full_name
 
         if "department" in fields_set:
-            record.department = update.department.strip() if update.department else None
+            department_id = record.department_id if "department_id" not in fields_set else update.department_id
+            resolved_department_id, resolved_department = self._resolve_department(
+                department_id=department_id,
+                department_name=update.department,
+                allow_legacy_department=True,
+            )
+            record.department_id = resolved_department_id
+            record.department = resolved_department
+
+        if "department_id" in fields_set and "department" not in fields_set:
+            resolved_department_id, resolved_department = self._resolve_department(
+                department_id=update.department_id,
+                department_name=None,
+            )
+            record.department_id = resolved_department_id
+            record.department = resolved_department
 
         record.updated_at = datetime.now(UTC)
         self.db.commit()
@@ -130,11 +154,56 @@ class EmployeeRegistryService:
 
         return normalized_code
 
-    @staticmethod
-    def _to_record(record: Employee) -> EmployeeRecord:
+    def _generate_employee_code(self) -> str:
+        for _ in range(10):
+            candidate = f"EMP-{secrets.token_hex(3).upper()}"
+            exists = (
+                self.db.query(Employee)
+                .filter(Employee.employee_code == candidate)
+                .first()
+            )
+            if exists is None:
+                return candidate
+        raise ValueError("unable to generate a unique employee_code")
+
+    def _resolve_department(
+        self,
+        *,
+        department_id: int | None,
+        department_name: str | None,
+        allow_legacy_department: bool = True,
+    ) -> tuple[int | None, str | None]:
+        if department_id is not None:
+            department = (
+                self.db.query(Department)
+                .filter(Department.id == department_id)
+                .filter(Department.active.is_(True))
+                .first()
+            )
+            if department is None:
+                raise ValueError(f"department {department_id} was not found")
+            return department.id, department.name
+
+        if department_name and allow_legacy_department:
+            normalized = department_name.strip()
+            return None, normalized or None
+
+        return None, None
+
+    def _has_face_embedding(self, employee_code: str) -> bool:
+        return (
+            self.db.query(FaceEmbedding.id)
+            .filter(FaceEmbedding.employee_code == employee_code)
+            .first()
+            is not None
+        )
+
+    def _to_record(self, record: Employee) -> EmployeeRecord:
         return EmployeeRecord(
             employee_code=record.employee_code,
             full_name=record.full_name,
+            department_id=record.department_id,
             department=record.department,
             active=bool(record.active),
+            has_face_embedding=self._has_face_embedding(record.employee_code),
         )

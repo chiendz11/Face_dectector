@@ -97,7 +97,9 @@ form label {
 
 input[type="text"],
 input[type="password"],
-td input {
+select,
+td input,
+td select {
   width: 100%;
   padding: 10px 14px;
   border: 1px solid rgba(58, 110, 165, 0.2);
@@ -105,6 +107,22 @@ td input {
   background: #fff;
   color: #142033;
   margin-top: 6px;
+}
+
+select {
+  appearance: none;
+}
+
+.compact-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.compact-form label {
+  margin-bottom: 0;
 }
 
 button.button {
@@ -323,8 +341,10 @@ table tbody tr.inactive-row {
   }
 
   .capture-header,
-  .form-row {
+  .form-row,
+  .compact-form {
     align-items: stretch;
     flex-direction: column;
+    grid-template-columns: 1fr;
   }
 }
