@@ -5,13 +5,17 @@ import fnmatch
 import json
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
 
 DEPLOY_LABELS = ("deploy-sandbox", "deploy-preview")
 SELF_APPROVE_LABEL = "allow-self-approve"
+SKIP_SANDBOX_LABEL = "skip-sandbox-approved"
+SANDBOX_RECOMMENDED_LABEL = "sandbox-recommended"
+SANDBOX_REQUIRED_LABEL = "sandbox-required"
+SANDBOX_VALIDATED_LABEL = "sandbox-validated"
 HEAVY_REASON_PATTERNS = {
     "Touches infrastructure, deployment, workflow, policy, or ingress control paths": [
         ".github/actions/**",
@@ -58,13 +62,27 @@ SERVICE_SURFACE_PATTERNS = {
 
 # Patterns that are considered critically sensitive and should block merges
 CRITICAL_PATH_PATTERNS = [
+    ".github/actions/**",
+    ".github/workflows/**",
+    ".github/CODEOWNERS",
+    "aws/**",
+    "deploy/**",
+    "nginx/**",
+    "policies/**",
     "terraform/**",
     "backend/alembic.ini",
     "backend/alembic/**",
     "iam/**",
     "network/**",
     "auth/**",
+    "scripts/evaluate_sandbox_requirement.py",
+    "scripts/resolve_workflow_context.py",
+    "scripts/update_gitops_image_locks.py",
 ]
+
+
+def utc_timestamp() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -235,11 +253,12 @@ def evaluate_policy(
     branch = str(pull_request["head"]["ref"])
     pr_author = str(pull_request.get("user", {}).get("login", ""))
     labels = sorted(str(label["name"]) for label in pull_request.get("labels", []))
+    label_trust = label_trust or {}
     has_deploy_label = any(label in DEPLOY_LABELS for label in labels)
     trusted_deploy_labels = [
         label
         for label in DEPLOY_LABELS
-        if label in labels and label_trust and label_trust.get(label, {}).get("trusted")
+        if label in labels and label_trust.get(label, {}).get("trusted")
     ]
     deploy_label = trusted_deploy_labels[0] if trusted_deploy_labels else None
     deploy_label_info = label_trust.get(deploy_label, {}) if label_trust and deploy_label else {}
@@ -249,17 +268,25 @@ def evaluate_policy(
     self_approve_label_actor = str(self_approve_label_info.get("actor") or "") if self_approve_label_info else None
     self_approve_label_trusted = bool(self_approve_label_info.get("trusted"))
     self_approve_allowed = allow_self_approve and self_approve_label_trusted
+    skip_sandbox_info = label_trust.get(SKIP_SANDBOX_LABEL, {})
+    skip_sandbox_actor = str(skip_sandbox_info.get("actor") or "") if skip_sandbox_info else None
+    skip_sandbox_trusted = bool(skip_sandbox_info.get("trusted"))
+    sandbox_validated_info = label_trust.get(SANDBOX_VALIDATED_LABEL, {})
+    sandbox_validated_actor = str(sandbox_validated_info.get("actor") or "") if sandbox_validated_info else None
+    sandbox_validated_trusted = bool(sandbox_validated_info.get("trusted"))
     is_dependabot_pr = pr_author == "dependabot[bot]" or branch.startswith("dependabot/")
     is_draft = bool(pull_request.get("draft", False))
     same_repo = pull_request["head"]["repo"]["full_name"] == repository["full_name"]
     reason_groups = collect_reason_groups(changed_files)
     classification = "heavy" if reason_groups else "fast"
-    requires_sandbox_label = (
-        classification == "heavy"
-        and same_repo
-        and not is_draft
-        and not is_dependabot_pr
-    )
+    enforceable_pr = same_repo and not is_draft and not is_dependabot_pr
+    # detect critical path touches
+    touches_critical_paths = any(path_matches(path, CRITICAL_PATH_PATTERNS) for path in changed_files)
+    risk_level = "critical" if touches_critical_paths else classification
+    sandbox_required = classification == "heavy" and touches_critical_paths and enforceable_pr
+    sandbox_recommended = classification == "heavy" and not touches_critical_paths and enforceable_pr
+    requires_sandbox_label = False
+    requires_sandbox_validation = sandbox_required
     # CODEOWNERS/ruleset exception: if approver is an owner of changed heavy files
     approval_exception = False
     matched_owners: set[str] = set()
@@ -282,21 +309,27 @@ def evaluate_policy(
     else:
         # no codeowners file loaded; fallback to numeric approvals
         approval_exception = approval_count >= 1
-    # detect critical path touches
-    touches_critical_paths = any(path_matches(path, CRITICAL_PATH_PATTERNS) for path in changed_files)
-    critical_path_requires_sandbox = touches_critical_paths and not deploy_label_trusted
-    governance_satisfied = deploy_label_trusted or approval_exception
-    should_fail = requires_sandbox_label and (not governance_satisfied or critical_path_requires_sandbox)
+
+    review_governance_satisfied = approval_exception
+    sandbox_governance_satisfied = (
+        not sandbox_required
+        or sandbox_validated_trusted
+        or skip_sandbox_trusted
+    )
 
     # blocking reasons (governance core)
     blocking_reasons: list[str] = []
-    if classification == "heavy" and same_repo and not is_draft and not is_dependabot_pr:
-        if not governance_satisfied:
-            blocking_reasons.append("missing_sandbox_label_or_approval")
-        if critical_path_requires_sandbox:
-            blocking_reasons.append("critical_path_requires_sandbox")
+    if sandbox_required and not sandbox_governance_satisfied:
+        blocking_reasons.append("sandbox_required_missing_validation_or_waiver")
 
     block = len(blocking_reasons) > 0
+    should_fail = block
+    auto_apply_eligible = (
+        enforceable_pr
+        and deploy_label_trusted
+        and not skip_sandbox_trusted
+        and not sandbox_validated_trusted
+    )
 
     if classification == "fast":
         decision = "pass"
@@ -313,7 +346,7 @@ def evaluate_policy(
     elif is_draft:
         decision = "advisory"
         summary = (
-            "This is a heavy-lane draft PR. The sandbox label gate is delayed until the PR is ready for review."
+            "This is a heavy-lane draft PR. Sandbox governance is delayed until the PR is ready for review."
         )
     elif not same_repo:
         decision = "advisory"
@@ -321,43 +354,57 @@ def evaluate_policy(
             "This is a heavy-lane PR from a fork. The standard same-repository auto-apply sandbox path is unavailable, "
             "so this check does not enforce a deploy label."
         )
-    elif deploy_label_trusted:
+    elif sandbox_required and sandbox_validated_trusted:
         decision = "pass"
         summary = (
-            "This PR is in the heavy lane and carries a trusted sandbox deploy label, so the reviewer-managed sandbox "
-            "requirement is satisfied and the sandbox deploy path may run."
+            "This PR touches critical paths and has a trusted `sandbox-validated` label for the current head, so the "
+            "sandbox governance requirement is satisfied."
         )
-    elif critical_path_requires_sandbox:
-        decision = "fail"
-        summary = (
-            "This PR touches critical paths and must carry `deploy-sandbox` or `deploy-preview` before it can pass "
-            "the sandbox policy gate."
-        )
-    elif approval_exception:
+    elif sandbox_required and skip_sandbox_trusted:
         decision = "pass"
         summary = (
-            "This PR is in the heavy lane but has sufficient approvals (CODEOWNERS/ruleset), so the reviewer-managed sandbox "
-            "requirement is satisfied."
+            "This PR touches critical paths, but the repository owner applied `skip-sandbox-approved`, so the "
+            "sandbox requirement is waived with an explicit audit trail."
         )
-    else:
+    elif sandbox_required:
         decision = "fail"
         summary = (
-            "This PR is in the heavy lane and is missing a trusted `deploy-sandbox`/`deploy-preview` label or sufficient approvals. "
-            "Have the repository owner add a sandbox deploy label, use the owner-only `allow-self-approve` path for non-critical changes, "
-            "or get an owner approval."
+            "This PR touches critical paths and must either pass sandbox validation (`sandbox-validated`) or carry a "
+            "trusted owner waiver (`skip-sandbox-approved`) before merge."
+        )
+    elif sandbox_recommended and deploy_label_trusted:
+        decision = "pass"
+        summary = (
+            "This PR is in the heavy lane and sandbox validation is recommended. A trusted deploy label is present, "
+            "so the sandbox auto-apply path may run after CI gates are green, but merge is not blocked by this policy."
+        )
+    elif sandbox_recommended:
+        decision = "pass"
+        summary = (
+            "This PR is in the heavy lane and sandbox validation is recommended, but it does not touch critical paths. "
+            "The bot may mark it `sandbox-recommended`; merge is not blocked unless a separate required check fails."
         )
     return {
         "version": "1",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": utc_timestamp(),
         "branch": branch,
         "changedFiles": changed_files,
         "classification": classification,
+        "riskLevel": risk_level,
         "decision": decision,
         "governanceMode": (
             "fast"
             if classification == "fast"
-            else "sandbox_deploy"
+            else "sandbox_validated"
+            if sandbox_validated_trusted
+            else "sandbox_waived"
+            if skip_sandbox_trusted
+            else "sandbox_deploy_requested"
             if deploy_label_trusted
+            else "sandbox_required"
+            if sandbox_required
+            else "sandbox_recommended"
+            if sandbox_recommended
             else "self_approved"
             if self_approve_used
             else "approved"
@@ -370,18 +417,32 @@ def evaluate_policy(
         "deployLabel": deploy_label,
         "deployLabelActor": deploy_label_actor,
         "deployLabelTrusted": deploy_label_trusted,
+        "skipSandboxLabel": SKIP_SANDBOX_LABEL if SKIP_SANDBOX_LABEL in labels else None,
+        "skipSandboxActor": skip_sandbox_actor,
+        "skipSandboxTrusted": skip_sandbox_trusted,
+        "sandboxValidated": SANDBOX_VALIDATED_LABEL in labels,
+        "sandboxValidatedActor": sandbox_validated_actor,
+        "sandboxValidatedTrusted": sandbox_validated_trusted,
+        "sandboxRecommended": sandbox_recommended,
+        "sandboxRequired": sandbox_required,
+        "recommendationLabel": SANDBOX_RECOMMENDED_LABEL if sandbox_recommended else None,
+        "requiredLabel": SANDBOX_REQUIRED_LABEL if sandbox_required else None,
         "isDevopsBranch": False,
         "isDependabotPr": is_dependabot_pr,
         "isDraft": is_draft,
         "reasonGroups": reason_groups,
         "requiresSandboxLabel": requires_sandbox_label,
-        "governanceSatisfied": governance_satisfied,
+        "requiresSandboxValidation": requires_sandbox_validation,
+        "reviewGovernanceSatisfied": review_governance_satisfied,
+        "sandboxGovernanceSatisfied": sandbox_governance_satisfied,
+        "governanceSatisfied": not block,
         "sameRepo": same_repo,
         "shouldFail": should_fail,
         "block": block,
         "blockingReasons": blocking_reasons,
-        "criticalPathRequiresSandbox": critical_path_requires_sandbox,
+        "criticalPathRequiresSandbox": sandbox_required,
         "touchesCriticalPaths": touches_critical_paths,
+        "autoApplyEligible": auto_apply_eligible,
         "summary": summary,
         "approvers": sorted(list(approvers)) if approvers else [],
         "matchedOwners": sorted(list(matched_owners)) if matched_owners else [],
@@ -397,10 +458,15 @@ def print_report(report: dict[str, Any]) -> None:
     print(f"Sandbox policy decision: {report['decision']}")
     print(f"Governance mode: {report.get('governanceMode', 'unknown')}")
     print(f"Lane classification: {report['classification']}")
+    print(f"Risk level: {report.get('riskLevel', report['classification'])}")
     print(f"Branch: {report['branch']}")
     print(f"Deploy label present: {report['hasDeployLabel']}")
     print(f"Trusted deploy label: {report.get('deployLabel') or 'none'}")
     print(f"Deploy label actor: {report.get('deployLabelActor') or 'none'}")
+    print(f"Sandbox recommended: {report.get('sandboxRecommended', False)}")
+    print(f"Sandbox required: {report.get('sandboxRequired', False)}")
+    print(f"Sandbox validated: {report.get('sandboxValidatedTrusted', False)}")
+    print(f"Sandbox waiver trusted: {report.get('skipSandboxTrusted', False)}")
     if report.get("selfApproveEligible"):
         print("Self-approve mode enabled: true")
         print(f"Self-approve actor: {report.get('selfApproveActor') or 'unknown'}")
@@ -469,7 +535,7 @@ def main(argv: list[str] | None = None) -> int:
         tb = traceback.format_exc()
         err_report = {
             "version": "1",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": utc_timestamp(),
             "decision": "error",
             "classification": "unknown",
             "summary": "Evaluator encountered an unexpected error.",
