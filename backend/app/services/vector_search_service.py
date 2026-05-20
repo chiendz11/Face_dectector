@@ -82,6 +82,34 @@ class VectorSearchService:
         self._stored_embeddings[normalized_code] = payload
         return payload
 
+    def delete_face_embedding(self, employee_code: str) -> bool:
+        normalized_code = employee_code.strip().upper()
+        if not normalized_code:
+            raise ValueError("employee_code must not be empty")
+
+        if self.db is not None:
+            existing = (
+                self.db.query(FaceEmbedding)
+                .filter(FaceEmbedding.employee_code == normalized_code)
+                .first()
+            )
+            if existing is None:
+                return False
+
+            self.db.delete(existing)
+
+            @retry_operation(
+                max_attempts=settings.db_retry_attempts,
+                initial_delay=settings.db_retry_backoff_seconds,
+            )
+            def attempt_commit() -> None:
+                self.db.commit()
+
+            DB_CIRCUIT_BREAKER.call(attempt_commit)
+            return True
+
+        return self._stored_embeddings.pop(normalized_code, None) is not None
+
     def search_similar_face(self, embedding: list[float]) -> dict:
         self._validate_embedding(embedding)
 

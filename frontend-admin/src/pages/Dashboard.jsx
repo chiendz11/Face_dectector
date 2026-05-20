@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import StatCard from "../components/StatCard";
+import EmployeeForm from "../features/employees/EmployeeForm";
+import EmployeeTable from "../features/employees/EmployeeTable";
+import {
+  createEmployee as requestCreateEmployee,
+  deactivateEmployee as requestDeactivateEmployee,
+  listEmployees as requestEmployees,
+  restoreEmployee as requestRestoreEmployee,
+  updateEmployee as requestUpdateEmployee,
+} from "../features/employees/employeeApi";
+import EnrollmentCapture from "../features/enrollment/EnrollmentCapture";
+import { createEnrollmentSession as requestEnrollmentSession } from "../features/enrollment/enrollmentApi";
 
 const defaultSession = {
-  employees: [],
   status: "ready",
-  error: "",
 };
 
 export default function Dashboard() {
@@ -12,29 +21,31 @@ export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
   const [status, setStatus] = useState(defaultSession.status);
   const [error, setError] = useState("");
-  const [enrollMessage, setEnrollMessage] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState({});
+  const [message, setMessage] = useState("");
+  const [includeInactive, setIncludeInactive] = useState(false);
   const [credentials, setCredentials] = useState({ username: "admin", password: "admin" });
   const [newEmployee, setNewEmployee] = useState({ employee_code: "", full_name: "", department: "" });
+  const [editingCode, setEditingCode] = useState("");
+  const [editEmployee, setEditEmployee] = useState({ full_name: "", department: "" });
+  const [enrollmentSession, setEnrollmentSession] = useState(null);
 
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const jsonHeaders = useMemo(() => ({ "Content-Type": "application/json", ...authHeaders }), [authHeaders]);
+  const activeEmployees = employees.filter((employee) => employee.active !== false);
+  const inactiveEmployees = employees.filter((employee) => employee.active === false);
 
   useEffect(() => {
     if (token) {
       fetchEmployees();
     }
-  }, [token]);
+  }, [token, includeInactive]);
 
-  const fetchEmployees = async () => {
+  async function fetchEmployees() {
     setStatus("loading");
     setError("");
 
     try {
-      const response = await fetch("/api/admin/employees", {
-        method: "GET",
-        headers: authHeaders,
-      });
+      const { response, payload } = await requestEmployees({ includeInactive, authHeaders });
 
       if (response.status === 401) {
         handleLogout();
@@ -45,17 +56,15 @@ export default function Dashboard() {
         throw new Error("Failed to load employees");
       }
 
-      const payload = await response.json();
       setEmployees(payload.items || []);
       setStatus("loaded");
-      setEnrollMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
     }
-  };
+  }
 
-  const handleLogin = async (event) => {
+  async function handleLogin(event) {
     event.preventDefault();
     setStatus("loading");
     setError("");
@@ -79,28 +88,29 @@ export default function Dashboard() {
       setError(err instanceof Error ? err.message : "Login failed");
       setStatus("error");
     }
-  };
+  }
 
-  const handleLogout = () => {
+  function handleLogout() {
     localStorage.removeItem("admin_token");
     setToken("");
     setEmployees([]);
-    setSelectedFiles({});
-    setEnrollMessage("");
+    setEditingCode("");
+    setEnrollmentSession(null);
+    setMessage("");
     setStatus(defaultSession.status);
     setError("");
-  };
+  }
 
-  const handleCreateEmployee = async (event) => {
+  async function handleCreateEmployee(event) {
     event.preventDefault();
     setStatus("loading");
     setError("");
+    setMessage("");
 
     try {
-      const response = await fetch("/api/admin/employees", {
-        method: "POST",
-        headers: jsonHeaders,
-        body: JSON.stringify(newEmployee),
+      const { response, payload } = await requestCreateEmployee({
+        employee: newEmployee,
+        jsonHeaders,
       });
 
       if (response.status === 401) {
@@ -109,44 +119,40 @@ export default function Dashboard() {
       }
 
       if (!response.ok) {
-        const payload = await response.json();
         throw new Error(payload.detail || "Create employee failed");
       }
 
       await fetchEmployees();
       setNewEmployee({ employee_code: "", full_name: "", department: "" });
+      setMessage(`Employee ${payload.employee_code} created.`);
       setStatus("loaded");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
       setStatus("error");
     }
-  };
+  }
 
-  const handleFileSelect = (employeeCode, file) => {
-    setSelectedFiles((prev) => ({ ...prev, [employeeCode]: file || null }));
-  };
+  function startEdit(employee) {
+    setEditingCode(employee.employee_code);
+    setEditEmployee({
+      full_name: employee.full_name || "",
+      department: employee.department || "",
+    });
+    setError("");
+    setMessage("");
+  }
 
-  const handleEnrollFace = async (event, employeeCode) => {
+  async function submitEdit(event, employeeCode) {
     event.preventDefault();
     setStatus("loading");
     setError("");
-    setEnrollMessage("");
-
-    const selectedFile = selectedFiles[employeeCode];
-    if (!selectedFile) {
-      setError("Please select an image file before enrolling.");
-      setStatus("error");
-      return;
-    }
+    setMessage("");
 
     try {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-
-      const response = await fetch(`/api/admin/employees/${encodeURIComponent(employeeCode)}/enroll`, {
-        method: "POST",
-        headers: authHeaders,
-        body: formData,
+      const { response, payload } = await requestUpdateEmployee({
+        employeeCode,
+        employee: editEmployee,
+        jsonHeaders,
       });
 
       if (response.status === 401) {
@@ -154,19 +160,109 @@ export default function Dashboard() {
         return;
       }
 
-      const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload.detail || "Enroll face failed");
+        throw new Error(payload.detail || "Update employee failed");
       }
 
-      setEnrollMessage(payload.message || `Face enrolled for ${employeeCode}.`);
-      setSelectedFiles((prev) => ({ ...prev, [employeeCode]: null }));
+      setEditingCode("");
+      await fetchEmployees();
+      setMessage(`Employee ${payload.employee_code} updated.`);
       setStatus("loaded");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Enroll face failed");
+      setError(err instanceof Error ? err.message : "Update failed");
       setStatus("error");
     }
-  };
+  }
+
+  async function deactivateEmployee(employeeCode) {
+    setStatus("loading");
+    setError("");
+    setMessage("");
+
+    try {
+      const { response, payload } = await requestDeactivateEmployee({ employeeCode, authHeaders });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Deactivate employee failed");
+      }
+
+      await fetchEmployees();
+      setMessage(`Employee ${payload.employee_code} deactivated.`);
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Deactivate failed");
+      setStatus("error");
+    }
+  }
+
+  async function restoreEmployee(employeeCode) {
+    setStatus("loading");
+    setError("");
+    setMessage("");
+
+    try {
+      const { response, payload } = await requestRestoreEmployee({ employeeCode, authHeaders });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Restore employee failed");
+      }
+
+      await fetchEmployees();
+      setMessage(`Employee ${payload.employee_code} restored.`);
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restore failed");
+      setStatus("error");
+    }
+  }
+
+  async function createEnrollmentSession(employee) {
+    setStatus("loading");
+    setError("");
+    setMessage("");
+
+    try {
+      const { response, payload } = await requestEnrollmentSession({
+        employeeCode: employee.employee_code,
+        authHeaders,
+      });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Create enrollment session failed");
+      }
+
+      setEnrollmentSession({
+        ...payload,
+        full_name: employee.full_name,
+        department: employee.department,
+      });
+      setStatus("loaded");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Create enrollment session failed");
+      setStatus("error");
+    }
+  }
+
+  function handleEnrollmentComplete(payload) {
+    setMessage(payload.message || "Enrollment completed.");
+    setEnrollmentSession(null);
+    fetchEmployees();
+  }
 
   return (
     <main className="page-shell">
@@ -175,7 +271,7 @@ export default function Dashboard() {
         <h1>Admin workspace for a practical office access-control system.</h1>
         <p className="lead">
           {token
-            ? "Manage your staff list and watch the kiosk recognition pipeline."
+            ? "Manage staff identities, edit employee records, and issue token-bound face enrollment sessions."
             : "Log in to connect this admin UI to the backend API and manage employees."}
         </p>
       </section>
@@ -211,95 +307,43 @@ export default function Dashboard() {
       ) : (
         <>
           <section className="grid">
-            <StatCard title="Employees" value={employees.length.toString()} hint="Registered staff identities" />
-            <StatCard title="Gates" value="1" hint="Primary kiosk connection" />
+            <StatCard title="Active employees" value={activeEmployees.length.toString()} hint="Available for access checks" />
+            <StatCard title="Inactive records" value={inactiveEmployees.length.toString()} hint="Soft-deleted audit records" />
             <StatCard title="Status" value={status} hint="Backend API session state" />
           </section>
 
-          <section className="card form-card">
-            <div className="form-row">
-              <h2>New employee</h2>
-              <button type="button" className="button button-secondary" onClick={handleLogout}>
-                Log out
-              </button>
-            </div>
-            <form onSubmit={handleCreateEmployee}>
-              <label>
-                Employee code
-                <input
-                  type="text"
-                  value={newEmployee.employee_code}
-                  onChange={(event) => setNewEmployee({ ...newEmployee, employee_code: event.target.value })}
-                  required
-                />
-              </label>
-              <label>
-                Full name
-                <input
-                  type="text"
-                  value={newEmployee.full_name}
-                  onChange={(event) => setNewEmployee({ ...newEmployee, full_name: event.target.value })}
-                  required
-                />
-              </label>
-              <label>
-                Department
-                <input
-                  type="text"
-                  value={newEmployee.department}
-                  onChange={(event) => setNewEmployee({ ...newEmployee, department: event.target.value })}
-                />
-              </label>
-              <button type="submit" className="button">
-                Add employee
-              </button>
-            </form>
-            {error && <p className="status-error">{error}</p>}
-          </section>
+          <EmployeeForm
+            employee={newEmployee}
+            error={error}
+            onChange={setNewEmployee}
+            onLogout={handleLogout}
+            onSubmit={handleCreateEmployee}
+          />
 
-          <section className="card">
-            <h2>Registered employees</h2>
-            {employees.length === 0 ? (
-              <p>No employees registered yet.</p>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Full name</th>
-                    <th>Department</th>
-                    <th>Face enrollment</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.map((employee) => (
-                    <tr key={employee.employee_code}>
-                      <td>{employee.employee_code}</td>
-                      <td>{employee.full_name}</td>
-                      <td>{employee.department || "—"}</td>
-                      <td>
-                        <form
-                          className="enroll-inline-form"
-                          onSubmit={(event) => handleEnrollFace(event, employee.employee_code)}
-                        >
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(event) => handleFileSelect(employee.employee_code, event.target.files?.[0])}
-                          />
-                          <button type="submit" className="button button-small">
-                            Enroll
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {enrollMessage && <p className="status-success">{enrollMessage}</p>}
-            {error && <p className="status-error">{error}</p>}
-          </section>
+          {enrollmentSession && (
+            <EnrollmentCapture
+              session={enrollmentSession}
+              onCancel={() => setEnrollmentSession(null)}
+              onComplete={handleEnrollmentComplete}
+            />
+          )}
+
+          <EmployeeTable
+            editEmployee={editEmployee}
+            editingCode={editingCode}
+            employees={employees}
+            error={error}
+            includeInactive={includeInactive}
+            message={message}
+            onCreateEnrollmentSession={createEnrollmentSession}
+            onDeactivate={deactivateEmployee}
+            onEditCancel={() => setEditingCode("")}
+            onEditChange={setEditEmployee}
+            onEditStart={startEdit}
+            onIncludeInactiveChange={setIncludeInactive}
+            onRestore={restoreEmployee}
+            onSubmitEdit={submitEdit}
+          />
         </>
       )}
     </main>

@@ -16,7 +16,9 @@ def healthcheck() -> dict:
     return {
         "status": "ok",
         "service": settings.app_name,
+        "embedding_provider": settings.embedding_provider,
         "model_name": settings.model_name,
         "model_version": settings.model_version,
+        "embedding_dimensions": settings.embedding_dimensions,
         "match_threshold": settings.match_threshold,
     }

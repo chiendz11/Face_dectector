@@ -16,6 +16,9 @@ class Employee(Base):
     employee_code = Column(String(32), unique=True, nullable=False, index=True)
     full_name = Column(String(128), nullable=False)
     department = Column(String(64), nullable=True)
+    active = Column(Boolean, default=True, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -43,4 +46,21 @@ class FaceEmbedding(Base):
         nullable=False,
     )
     embedding_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class EnrollmentSession(Base):
+    __tablename__ = "enrollment_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    employee_code = Column(String(32), nullable=False, index=True)
+    status = Column(String(24), default="pending", nullable=False)
+    created_by = Column(String(128), nullable=False)
+    used_by = Column(String(128), nullable=True)
+    device_name = Column(String(64), nullable=True)
+    sample_count = Column(Integer, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

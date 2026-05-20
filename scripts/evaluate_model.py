@@ -33,13 +33,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.35,
+        default=0.55,
         help="Cosine similarity threshold for a positive match.",
     )
     parser.add_argument(
         "--model-name",
-        default="VGG-Face",
+        default="Facenet512",
         help="Model name to use for face embedding extraction.",
+    )
+    parser.add_argument(
+        "--embedding-dimensions",
+        type=int,
+        default=512,
+        help="Expected embedding dimensions for the selected model.",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=("deepface", "hash"),
+        default="deepface",
+        help="Embedding provider. Use deepface for accuracy evaluation.",
     )
     return parser.parse_args()
 
@@ -84,8 +96,11 @@ def main() -> None:
     dataset_name = "DeepFace"
     print(f"Evaluating face recognition accuracy with model: {dataset_name}")
 
-    service = DeepFaceService()
-    service.model_name = args.model_name
+    service = DeepFaceService(
+        provider=args.provider,
+        model_name=args.model_name,
+        embedding_dimensions=args.embedding_dimensions,
+    )
 
     gallery_images = load_labeled_images(gallery_dir)
     query_images = load_labeled_images(query_dir)

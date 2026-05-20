@@ -7,7 +7,8 @@ Script `qa-local-compose.ps1` mặc định dùng 2 file:
 - `docker-compose.yml`
 - `docker-compose.dev.yml`
 
-Nghĩa là chỉ chạy stack local chuẩn (backend, worker, frontend-admin, nginx, db, redis, minio...), chưa có edge-client.
+Nghĩa là chạy stack local chuẩn (backend, worker, frontend-admin,
+nginx, db, redis, minio...), chưa có edge-client.
 
 ## 2) Khi nào edge-client được chạy?
 
@@ -228,6 +229,12 @@ Admin UI:
 Invoke-WebRequest http://localhost/admin/
 ```
 
+Enrollment compatibility redirect:
+
+```powershell
+Invoke-WebRequest http://localhost/admin/
+```
+
 ## 6) Troubleshooting khi `-Action qa` bị timeout
 
 Nếu script báo timeout ở `http://localhost/health`, nguyên nhân thường là backend chưa start thành công dù container đang `Up`.
@@ -251,4 +258,85 @@ Nếu vẫn lỗi, build sạch:
 
 ```powershell
 .\scripts\qa-local-compose.ps1 -Action qa -Build -NoCache
+```
+
+## 7) Manual E2E: enroll face rồi verify qua edge
+
+Flow này dùng frontend-admin để tạo vector thật trong Postgres/pgvector, sau đó
+edge-client gửi face crop về backend để verify.
+
+Trước khi chạy, đảm bảo file `.env` local đang dùng cùng model contract với
+`.env.example`:
+
+```env
+EMBEDDING_PROVIDER=deepface
+MODEL_NAME=Facenet512
+MODEL_VERSION=2026.05-deepface-facenet512
+EMBEDDING_DIMENSIONS=512
+DEEPFACE_DETECTOR_BACKEND=opencv
+DEEPFACE_ALIGN=true
+DEEPFACE_ENFORCE_DETECTION=false
+EMBEDDING_ALLOW_HASH_FALLBACK=false
+MATCH_THRESHOLD=0.55
+```
+
+Chạy stack server:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+Chạy migration. Migration đổi `face_embeddings.embedding` sang `vector(512)` sẽ
+fail nếu bảng đã có embedding cũ; khi local test chưa có dữ liệu, migration sẽ
+đi qua bình thường.
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec backend alembic upgrade head
+```
+
+Mở admin UI:
+
+```text
+http://localhost/admin/
+```
+
+Mở admin enrollment session UI:
+
+```text
+http://localhost/admin/
+```
+
+Lưu ý production: admin enrollment session phải chạy qua HTTPS để browser cho phép
+truy cập camera. `localhost` chỉ là ngoại lệ cho dev/test local.
+
+Login bằng user/password trong `.env`, tạo employee ở admin UI, rồi dùng
+admin enrollment session để chụp 3-5 mẫu mặt live cho employee đó.
+
+Kiểm tra vector đã được ghi:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec db psql -U postgres -d face_detector -c "select employee_code, created_at from face_embeddings;"
+```
+
+Test API recognition bằng ảnh file:
+
+```powershell
+curl.exe -F "device_name=local-manual-test" -F "file=@.\path\to\face.jpg" http://localhost/api/vision/recognize
+```
+
+Trên Windows, chạy edge-client bằng venv local để verify ở kiosk:
+
+```powershell
+cd edge-client
+.\.venv\Scripts\Activate.ps1
+$env:API_BASE_URL = "http://localhost"
+$env:EDGE_BACKEND_ENABLED = "true"
+$env:EDGE_UI_MODE = "web"
+python main.py
+```
+
+Mở kiosk UI:
+
+```text
+http://localhost:8080
 ```

@@ -2,8 +2,10 @@
     "allowedLicenses": [
         "0BSD",
         "3-Clause BSD License",
+        "Apache License 2.0",
         "Apache Software License",
         "Apache-2.0",
+        "BSD",
         "BSD License",
         "BSD-2-Clause",
         "BSD-3-Clause",
@@ -21,6 +23,7 @@
     "reviewLicenses": [
         "CC-BY-4.0",
         "GNU Lesser General Public License v3 (LGPLv3)",
+        "MPL-2.0",
         "Mozilla Public License 2.0 (MPL 2.0)",
         "ZPL-2.1"
     ],
@@ -43,6 +46,13 @@
             "package": "frontend-admin",
             "privateOnly": true,
             "reason": "Ignore the repository's private frontend workspace package."
+        }
+    ],
+    "reviewPackages": [
+        {
+            "surface": "backend",
+            "package": "namex",
+            "reason": "Keras dependency publishes UNKNOWN license metadata in the pip inventory; keep as review-required until upstream metadata is corrected or the package is replaced."
         }
     ]
 }
