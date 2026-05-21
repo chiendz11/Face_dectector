@@ -3,8 +3,7 @@ FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --include=optional \
-    && npm install --no-save @rolldown/binding-linux-x64-gnu lightningcss-linux-x64-gnu @rollup/rollup-linux-x64-gnu
+RUN npm ci --include=optional
 
 FROM node:20-bookworm-slim AS build
 

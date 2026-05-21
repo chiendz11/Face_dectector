@@ -7,7 +7,10 @@ pytestmark = pytest.mark.e2e
 def test_live_staging_critical_write_path(live_api) -> None:
     employee_code = live_api.make_employee_code("STG")
     filename = "staging-face.jpg"
-    face_bytes = b"staging-integration-face-payload"
+    face_bytes = live_api.face_sample(
+        env_var="FACE_DETECTOR_LIVE_FACE_IMAGE_PATH",
+        synthetic_bytes=b"staging-integration-face-payload",
+    )
 
     created = live_api.create_employee(employee_code, "Staging Smoke", "Platform")
     assert created["employee_code"] == employee_code

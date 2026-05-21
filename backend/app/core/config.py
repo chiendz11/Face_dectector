@@ -1,4 +1,20 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+MODEL_EMBEDDING_DIMENSIONS = {
+    "VGG-Face": 4096,
+    "Facenet": 128,
+    "Facenet512": 512,
+    "OpenFace": 128,
+    "DeepFace": 4096,
+    "DeepID": 160,
+    "Dlib": 128,
+    "ArcFace": 512,
+    "SFace": 128,
+    "GhostFaceNet": 512,
+    "Buffalo_L": 512,
+}
 
 
 class Settings(BaseSettings):
@@ -52,6 +68,16 @@ class Settings(BaseSettings):
         extra="ignore",
         protected_namespaces=(),
     )
+
+    @model_validator(mode="after")
+    def normalize_embedding_dimensions(self) -> "Settings":
+        if self.embedding_provider.strip().lower() != "deepface":
+            return self
+
+        expected_dimensions = MODEL_EMBEDDING_DIMENSIONS.get(self.model_name)
+        if expected_dimensions is not None:
+            self.embedding_dimensions = expected_dimensions
+        return self
 
 
 settings = Settings()
