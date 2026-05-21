@@ -57,6 +57,27 @@ class WorkflowGovernancePolicyTest(unittest.TestCase):
         self.assertIn("--policy policies/github/workflows", validate_step["run"])
         self.assertIn("--data policies/data", validate_step["run"])
 
+    def test_sandbox_workflow_run_only_signals_pull_request_target_apply(self) -> None:
+        workflow = load_yaml(REPO_ROOT / ".github/workflows/sandbox-auto-apply.yml")
+        jobs = workflow["jobs"]
+
+        self.assertIn("workflow_run", workflow["on"])
+
+        signal_job = jobs["signal-apply-ready"]
+        self.assertIn("github.event_name == 'workflow_run'", signal_job["if"])
+        self.assertEqual(signal_job["permissions"]["issues"], "write")
+        signal_script = signal_job["steps"][0]["with"]["script"]
+        self.assertIn("removeLabel", signal_script)
+        self.assertIn("addLabels", signal_script)
+        self.assertIn("ready-for-deploy", signal_script)
+
+        for job_name in ("apply-infrastructure", "bootstrap-sandbox", "mark-sandbox-validated"):
+            self.assertIn(
+                "github.event_name == 'pull_request_target'",
+                jobs[job_name]["if"],
+                f"{job_name} must not assume AWS permissions from workflow_run events",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
