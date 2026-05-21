@@ -492,6 +492,23 @@ class AppCdSandboxBootstrapContractTest(unittest.TestCase):
         self.assertEqual(permissions["packages"], "write")
 
 
+class HelmChartContractTest(unittest.TestCase):
+    def test_all_private_image_workloads_use_global_image_pull_secrets(self) -> None:
+        workloads = [
+            "backend-deployment.yaml",
+            "frontend-deployment.yaml",
+            "migration-job.yaml",
+            "nginx.yaml",
+            "worker-deployment.yaml",
+        ]
+
+        for workload in workloads:
+            with self.subTest(workload=workload):
+                template = (REPO_ROOT / f"deploy/helm/face-detector/templates/{workload}").read_text(encoding="utf-8")
+                self.assertIn("{{- with .Values.imagePullSecrets }}", template)
+                self.assertIn("imagePullSecrets:", template)
+
+
 class ReusableAppReleaseContractTest(unittest.TestCase):
     def test_reusable_app_release_resolve_step_writes_expected_publish_artifacts(self) -> None:
         workflow = load_yaml(REPO_ROOT / ".github/workflows/reusable-app-release.yml")
