@@ -515,6 +515,16 @@ class AppCdSandboxBootstrapContractTest(unittest.TestCase):
                 self.assertEqual(permissions["pull-requests"], "write")
 
 
+class SandboxPolicyContractTest(unittest.TestCase):
+    def test_trusted_label_resolution_reads_live_pr_labels(self) -> None:
+        workflow = load_yaml(REPO_ROOT / ".github/workflows/sandbox-policy.yml")
+
+        script = extract_step(workflow, "evaluate", "Resolve trusted governance labels")["with"]["script"]
+        self.assertIn("github.rest.pulls.get", script)
+        self.assertIn("Unable to resolve live PR labels", script)
+        self.assertIn("const presentLabels = new Set((pr.labels || []).map(l => l.name));", script)
+
+
 class HelmChartContractTest(unittest.TestCase):
     def test_all_private_image_workloads_use_global_image_pull_secrets(self) -> None:
         workloads = [
