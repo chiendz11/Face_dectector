@@ -12,14 +12,10 @@ except ImportError:  # pragma: no cover
     cv2 = None
     np = None
 
-try:
-    from deepface import DeepFace
-except ImportError:  # pragma: no cover
-    DeepFace = None
-
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+DeepFace: Any | None = None
 
 MODEL_EMBEDDING_DIMENSIONS = {
     "VGG-Face": 4096,
@@ -101,13 +97,12 @@ class DeepFaceService:
         image_bytes: bytes,
         enforce_detection: bool | None = None,
     ) -> list[float]:
-        if DeepFace is None:
-            raise RuntimeError("deepface is not installed")
+        deepface = _load_deepface()
         if cv2 is None or np is None:
             raise RuntimeError("OpenCV and numpy are required for DeepFace embeddings")
 
         image = self._decode_image(image_bytes)
-        representation = DeepFace.represent(
+        representation = deepface.represent(
             img_path=image,
             model_name=self.model_name,
             detector_backend=self.detector_backend,
@@ -187,3 +182,17 @@ class DeepFaceService:
             embedding.append(normalized_value)
 
         return embedding
+
+
+def _load_deepface() -> Any:
+    global DeepFace
+    if DeepFace is not None:
+        return DeepFace
+
+    try:
+        from deepface import DeepFace as deepface_client
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError("deepface is not installed") from exc
+
+    DeepFace = deepface_client
+    return DeepFace

@@ -480,7 +480,10 @@ def test_deepface_provider_rejects_known_model_dimension_mismatch() -> None:
 def test_deepface_provider_fails_closed_when_dependency_missing(monkeypatch) -> None:
     from app.services import deepface_service as deepface_module
 
-    monkeypatch.setattr(deepface_module, "DeepFace", None)
+    def missing_deepface():
+        raise RuntimeError("deepface is not installed")
+
+    monkeypatch.setattr(deepface_module, "_load_deepface", missing_deepface)
     service = DeepFaceService(provider="deepface", model_name="Facenet512", embedding_dimensions=512)
 
     with pytest.raises(RuntimeError, match="DeepFace embedding failed"):
