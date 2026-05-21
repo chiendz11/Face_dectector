@@ -12,25 +12,10 @@ except ImportError:  # pragma: no cover
     cv2 = None
     np = None
 
-from app.core.config import settings
+from app.core.config import MODEL_EMBEDDING_DIMENSIONS, settings
 
 logger = logging.getLogger(__name__)
 DeepFace: Any | None = None
-
-MODEL_EMBEDDING_DIMENSIONS = {
-    "VGG-Face": 4096,
-    "Facenet": 128,
-    "Facenet512": 512,
-    "OpenFace": 128,
-    "DeepFace": 4096,
-    "DeepID": 160,
-    "Dlib": 128,
-    "ArcFace": 512,
-    "SFace": 128,
-    "GhostFaceNet": 512,
-    "Buffalo_L": 512,
-}
-
 
 class DeepFaceService:
     def __init__(

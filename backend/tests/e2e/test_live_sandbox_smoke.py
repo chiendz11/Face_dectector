@@ -7,7 +7,10 @@ pytestmark = pytest.mark.e2e
 def test_live_sandbox_full_employee_flow(live_api) -> None:
     employee_code = live_api.make_employee_code("SBX")
     filename = "sandbox-face.jpg"
-    face_bytes = b"sandbox-integration-face-payload"
+    face_bytes = live_api.face_sample(
+        env_var="FACE_DETECTOR_LIVE_FACE_IMAGE_PATH",
+        synthetic_bytes=b"sandbox-integration-face-payload",
+    )
 
     created = live_api.create_employee(employee_code, "Sandbox Smoke", "Platform")
     assert created["employee_code"] == employee_code
@@ -60,10 +63,14 @@ def test_live_sandbox_enroll_empty_file_returns_400(client, auth_headers, live_a
 
 
 def test_live_sandbox_recognize_unknown_face_is_rejected(live_api) -> None:
-    # Submit a face that has never been enrolled → should always be rejected.
+    # Submit a face that has never been enrolled -> should always be rejected.
+    face_bytes = live_api.face_sample(
+        env_var="FACE_DETECTOR_LIVE_UNKNOWN_FACE_IMAGE_PATH",
+        synthetic_bytes=b"totally-unknown-face-payload-xyz-123",
+    )
     payload = live_api.recognize_face(
         "unknown.jpg",
-        b"totally-unknown-face-payload-xyz-123",
+        face_bytes,
         "test-gate",
     )
 

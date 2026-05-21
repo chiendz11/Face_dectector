@@ -1,6 +1,7 @@
 import os
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import boto3
 import httpx
@@ -73,6 +74,24 @@ def auth_headers(client: httpx.Client) -> dict[str, str]:
 class LiveApiSession:
     client: httpx.Client
     auth_headers: dict[str, str]
+
+    def backend_health(self) -> dict:
+        response = _request_with_rate_limit_retry(self.client, "GET", "/health")
+        response.raise_for_status()
+        return response.json()
+
+    def face_sample(self, *, env_var: str, synthetic_bytes: bytes) -> bytes:
+        sample_path = os.getenv(env_var)
+        if sample_path:
+            return Path(sample_path).read_bytes()
+
+        provider = str(self.backend_health().get("embedding_provider", "")).strip().lower()
+        if provider == "hash":
+            return synthetic_bytes
+
+        pytest.skip(
+            f"{env_var} is required for live face smoke when embedding_provider={provider or 'unknown'}"
+        )
 
     def make_employee_code(self, prefix: str) -> str:
         return f"{prefix}-{int(time.time())}"

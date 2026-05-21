@@ -522,6 +522,14 @@ class HelmChartContractTest(unittest.TestCase):
                 self.assertIn("{{- with .Values.imagePullSecrets }}", template)
                 self.assertIn("imagePullSecrets:", template)
 
+    def test_nginx_routes_public_health_to_backend(self) -> None:
+        template = (REPO_ROOT / "deploy/helm/face-detector/templates/nginx.yaml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("location = /health", template)
+        self.assertIn("proxy_pass http://backend_upstream/health;", template)
+
 
 class ReusableAppReleaseContractTest(unittest.TestCase):
     def test_reusable_app_release_resolve_step_writes_expected_publish_artifacts(self) -> None:
